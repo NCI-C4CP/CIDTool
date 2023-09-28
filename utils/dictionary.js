@@ -1,4 +1,4 @@
-import { objectExists, isEmpty } from "./common.js";
+import { objectExists, isEmpty, uniqueKeys } from "./common.js";
 
 export const parseColumns = (headers) => {
     
@@ -43,6 +43,34 @@ export const structureDictionary = (mapping, columns, data) => {
     conceptObjects = findObjects(mapping, columns, data, 'QUESTION', conceptObjects);
     
     return conceptObjects;
+}
+
+export const structureFiles = (data) => {
+
+    const primaryObjects = data.filter(x => x.object_type === "PRIMARY");
+    const secondaryObjects = data.filter(x => x.object_type === "SECONDARY");
+    const sourceObjects = data.filter(x => x.object_type === "SOURCE");
+    const questionObjects = data.filter(x => x.object_type === "QUESTION");
+    const responseObjects = data.filter(x => x.object_type === "RESPONSE");
+
+    const primaryKeys = uniqueKeys(primaryObjects);
+    const secondaryKeys = uniqueKeys(secondaryObjects);
+    const sourceKeys = uniqueKeys(sourceObjects);
+    const questionKeys = uniqueKeys(questionObjects);
+    const responseKeys = uniqueKeys(responseObjects);
+
+    let dictionaryArray = [];
+
+    dictionaryArray = filesToArray(primaryObjects, primaryKeys, "Primary", dictionaryArray);
+    dictionaryArray = filesToArray(secondaryObjects, secondaryKeys, "Secondary", dictionaryArray);
+    dictionaryArray = filesToArray(questionObjects, questionKeys, "Question", dictionaryArray);
+    dictionaryArray = filesToArray(sourceObjects, sourceKeys, "Source", dictionaryArray);
+
+    dictionaryArray = sortDictionaryArray(dictionaryArray);
+
+    dictionaryArray = filesToArray(responseObjects, responseKeys, "Response", dictionaryArray);
+
+    return dictionaryArray;
 }
 
 const findObjects = (mapping, columns, data, objectType, conceptObjects) => {
@@ -109,7 +137,7 @@ const findObjects = (mapping, columns, data, objectType, conceptObjects) => {
                     if(fields.VALUE !== undefined) delete fields.VALUE;
                 }
 
-                conceptObjects.push(buildObject(mapping, data[row][keyColumn], fields));
+                conceptObjects.push(buildObject(mapping, data[row][keyColumn], fields, objectType));
             }  
         }
     }
@@ -117,24 +145,14 @@ const findObjects = (mapping, columns, data, objectType, conceptObjects) => {
     return conceptObjects;
 }
 
-const addResponses = (value, responses) => {
-
-    if(responses.length > 0) {
-        let object = conceptObjects.find(x => x.key === value);
-
-        if(object) {
-            object['responses'] = responses;
-        }
-    }    
-}
-
-const buildObject = (mapping, value, fields) => {
+const buildObject = (mapping, value, fields, type) => {
 
     let conceptObject = {};
     let id = mapping.filter(x => x.concept === value)[0].id;
 
     conceptObject['key'] = value;
     conceptObject['conceptID'] = id;
+    conceptObject['object_type'] = type;
 
     if(fields && !isEmpty(fields)) {
         Object.keys(fields).forEach(field => {
@@ -143,4 +161,197 @@ const buildObject = (mapping, value, fields) => {
     }
 
     return conceptObject;
+}
+
+const filesToArray = (objects, keys, type, dictionaryArray) => {
+
+    let headers;
+    let fieldToIndex = {};
+
+    let typeMapping = {
+        'Secondary': 'Primary Concept ID',
+        'Question': 'Secondary Concept ID'
+    }
+
+    if(dictionaryArray.length === 0) {
+        dictionaryArray.push([]);
+    }
+
+    headers = dictionaryArray[0];
+
+    if(type === 'Source') {
+        let sourceIndex = headers.indexOf('source');
+        dictionaryArray[0][sourceIndex] = 'Source Concept ID';
+        keys = keys.filter(x => x !== 'conceptID');
+
+        for(let i = 0; i < dictionaryArray.length; i++) {
+            dictionaryArray[i].splice(sourceIndex, 0, "");
+        }
+
+        dictionaryArray[0][sourceIndex] = 'Source Key';
+        keys = keys.filter(x => x !== 'key');
+        fieldToIndex['key'] = sourceIndex;
+        fieldToIndex['conceptID'] = sourceIndex + 1;
+
+        for(let i = 1; i < dictionaryArray.length; i++) {
+            if(dictionaryArray[i][fieldToIndex['conceptID']]) {
+                let targetObject = objects.filter(x => x.conceptID === dictionaryArray[i][fieldToIndex['conceptID']]);
+                
+                if(targetObject.length === 1) {
+                    dictionaryArray[i][fieldToIndex['key']] = targetObject[0].key;
+                }
+            }
+        }
+
+        // add other key headers
+
+        return dictionaryArray;
+    }
+
+    if(type === 'Response') {
+
+        fieldToIndex['key'] = headers.length - 1;
+        dictionaryArray[0][headers.length - 1] = 'Response Key';
+        keys = keys.filter(x => x !== 'key');
+
+        fieldToIndex['value'] = headers.length;
+        headers.push(type + ' Value');
+        keys = keys.filter(x => x !== 'value');
+
+        fieldToIndex['conceptID'] = headers.length;
+        headers.push(type + ' Concept ID');
+        keys = keys.filter(x => x !== 'conceptID');
+
+
+        for(let i = dictionaryArray.length - 1; i > 0; i--) {
+            if(dictionaryArray[i][fieldToIndex['key']]) {
+                let responsesObject = JSON.parse(dictionaryArray[i][fieldToIndex['key']]);
+                let responseKeys = Object.keys(responsesObject);
+
+                let first = true;
+                for(let j = 0; j < responseKeys.length; j++) {
+                    if(!first) {
+                        dictionaryArray.splice(i + j, 0, new Array(headers.length));
+                    }
+
+                    let object = objects.filter(x => x.conceptID === responsesObject[responseKeys[j]]);
+                    if(object.length === 1) {
+                        dictionaryArray[i + j][fieldToIndex['key']] = object[0].key;
+                        dictionaryArray[i + j][fieldToIndex['value']] = responseKeys[j];
+                        dictionaryArray[i + j][fieldToIndex['conceptID']] = object[0].conceptID;
+                    }
+
+                    first = false;
+                }
+            }
+        }
+
+        // add other response key headers
+
+        return dictionaryArray;
+    }
+
+    if(keys.includes('source')) {
+        fieldToIndex['source'] = headers.length;
+        headers.push('source');
+        keys = keys.filter(x => x !== 'source');
+    }
+
+    if(keys.includes('key')) {
+        fieldToIndex['key'] = headers.length;
+        headers.push(type + ' Key');
+        keys = keys.filter(x => x !== 'key');
+    }
+
+    if(keys.includes('conceptID')) {
+        fieldToIndex['conceptID'] = headers.length;
+        headers.push(type + ' Concept ID');
+        keys = keys.filter(x => x !== 'conceptID');
+    }
+
+    if(keys.includes('parent')) {
+        keys = keys.filter(x => x !== 'parent');
+    }
+
+    for(let key of keys) {
+        fieldToIndex[`${key}`] = headers.length;
+        headers.push(key);
+    }
+
+    let mappingKeys = Object.keys(fieldToIndex);
+
+    if(typeMapping[type]) {
+        const columnIndex = dictionaryArray[0].findIndex(item => item === typeMapping[type]);
+        let columnValues = dictionaryArray.map(row => row[columnIndex]);
+        columnValues.shift();
+        const uniqueValues = [...new Set(columnValues)];
+
+        for(const uniqueValue of uniqueValues) {
+
+            let rows = [];
+
+            let matchingObjects = objects.filter(x => x['parent'] === uniqueValue);
+
+            let insertIndex = dictionaryArray.findIndex(row => row[columnIndex] === uniqueValue)
+            let lineTemplate = dictionaryArray[insertIndex];
+
+            if(lineTemplate.length < headers.length) {
+                lineTemplate.length = headers.length;
+            }
+
+            for(const object of matchingObjects) {
+                let line = lineTemplate.slice();
+
+                for(const mappingKey of mappingKeys) {
+                    if(typeof object[mappingKey] === 'object') {
+                        if(!isEmpty(object[mappingKey])) {
+                            line[fieldToIndex[mappingKey]] = JSON.stringify(object[mappingKey]);
+                        }
+                    }
+                    else {
+                        line[fieldToIndex[mappingKey]] = object[mappingKey];
+                    }
+                }
+
+                rows.push(line);
+
+            }
+
+            dictionaryArray = [
+                ...dictionaryArray.slice(0, insertIndex),
+                ...rows,
+                ...dictionaryArray.slice(insertIndex + 1)
+            ];
+
+            console.log();
+        }
+    }
+    else {
+        for(const object of objects) {
+            let line = new Array(headers.length);
+            for(const mappingKey of mappingKeys) {
+                line[fieldToIndex[mappingKey]] = object[mappingKey];
+            }
+            dictionaryArray.push(line);
+        }
+    }
+
+    return dictionaryArray;
+}
+
+const sortDictionaryArray = (dictionaryArray) => {
+
+    const primaryConcept = dictionaryArray[0].findIndex(item => item === 'Primary Concept ID');
+    const secondaryConcept = dictionaryArray[0].findIndex(item => item === 'Secondary Concept ID');
+    const sourceConcept = dictionaryArray[0].findIndex(item => item === 'Source Concept ID');
+
+    dictionaryArray.sort((a, b) => {
+        if (a[primaryConcept] !== b[primaryConcept]) return a[primaryConcept] - b[primaryConcept];
+        if (a[secondaryConcept] !== b[secondaryConcept]) return a[secondaryConcept] - b[secondaryConcept];
+        if (a[sourceConcept] !== b[sourceConcept]) return a[sourceConcept] - b[sourceConcept];
+
+        return 0;
+    });
+
+    return dictionaryArray;
 }

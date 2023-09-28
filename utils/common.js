@@ -16,3 +16,19 @@ export const isEmpty = (object) => {
 
     return true;
 }  
+
+export const uniqueKeys = (objects) => {
+
+    let keys = [];
+
+    for(let object of objects) {
+        const objectKeys = Object.keys(object);
+        
+        for(let key of objectKeys) {
+            if(key === "object_type") continue;
+            if(!keys.includes(key)) keys.push(key);
+        }
+    }
+    
+    return keys;
+}
