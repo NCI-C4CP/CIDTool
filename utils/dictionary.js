@@ -126,7 +126,7 @@ const findObjects = (mapping, columns, data, objectType, conceptObjects) => {
 
                             count++;
                         }
-                    } while (!data[row + count][keyColumn]);
+                    } while (!data[row + count] && !data[row + count]?.[keyColumn]);
 
                     fields.responses = responses;
 
