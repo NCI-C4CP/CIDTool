@@ -32,3 +32,21 @@ export const uniqueKeys = (objects) => {
     
     return keys;
 }
+
+const createStore = (initialState = {}) => {
+    let state = initialState;
+  
+    const setState = (update) => {
+      const currSlice = typeof update === 'function' ? update(state) : update;
+  
+      if (currSlice !== state) {
+        state = { ...state, ...currSlice };
+      }
+    };
+  
+    const getState = () => state;
+  
+    return { setState, getState };
+}
+
+export const appState = createStore();
