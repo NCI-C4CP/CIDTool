@@ -126,7 +126,7 @@ const findObjects = (mapping, columns, data, objectType, conceptObjects) => {
 
                             count++;
                         }
-                    } while (!data[row + count] && !data[row + count]?.[keyColumn]);
+                    } while (data[row + count] && !data[row + count]?.[keyColumn]);
 
                     fields.responses = responses;
 
@@ -171,6 +171,11 @@ const filesToArray = (objects, keys, type, dictionaryArray) => {
     let typeMapping = {
         'Secondary': 'Primary Concept ID',
         'Question': 'Secondary Concept ID'
+    }
+
+    if(keys.includes('responses')) {
+        keys = keys.filter(x => x !== 'responses');
+        keys.push('responses');
     }
 
     if(dictionaryArray.length === 0) {
