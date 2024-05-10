@@ -3,6 +3,53 @@ import { readSpreadsheet, readFiles, generateSpreadsheet } from "./utils/files.j
 import { parseColumns, structureDictionary, structureFiles } from "./utils/dictionary.js";
 import { appState } from "./utils/common.js";
 
+const CLIENT_ID = 'Iv23liogHuXaHwzjvHUz'
+const REDIRECT_URI = 'http://localhost:5000/';
+
+window.onload = async () => {
+    router();
+}
+
+window.onhashchange = () => {
+    router();
+}
+
+const router = async () => {
+    
+    const { loggedIn } = appState.getState();
+
+    if(!loggedIn) {
+        appState.setState({ loggedIn: false });
+    }
+
+    let route = window.location.hash || '#';
+    
+    // Check for 'code' parameter in URL which indicates we are on the callback URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+
+    if (code) {
+        // If there's a code, handle the OAuth callback
+        await handleCallback();
+    } else {
+        // Continue with existing routing logic
+        if (loggedIn) {
+            if (route === '#home') {
+                homePage();
+            } else {
+                window.location.hash = '#';
+            }
+        } else {
+            if (route === '#') {
+                login();
+            } else {
+                window.location.hash = '#';
+            }
+        }
+    }
+}
+
+
 const dictionary_import = async (event) => {  
 
     const data = await readSpreadsheet(event.target.files[0]);
@@ -68,3 +115,83 @@ document.getElementById('input_dom_element').addEventListener('change', async ()
     const conceptObjects = structureDictionary(mapping, columns, data);
     appState.setState({ conceptObjects });
 });
+
+const login = () => {
+
+    const homepage = document.getElementById('homepage');
+    const callback = document.getElementById('callback');
+    const loginButton = document.getElementById('login');
+
+    homepage.style.display = '';
+    callback.style.display = 'none';    
+
+    loginButton.addEventListener('click', () => {
+        const url = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}`;
+        window.location.href = url;
+    });
+}
+
+const homePage = async () => {
+    
+    const homepage = document.getElementById('homepage');
+    const callback = document.getElementById('callback');
+    
+    homepage.style.display = 'none';
+    callback.style.display = '';
+
+    const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getUser', {
+        method: 'GET',
+        headers: {
+            Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        }
+    });
+
+    const data = await response.json();
+
+    callback.innerHTML = `<h1>Welcome ${data.data.name}</h1>`;
+    console.log();
+}
+
+const handleCallback = async () => {
+    const code = new URL(window.location.href).searchParams.get('code');
+    if (code) {
+        const url = new URL(window.location);
+        url.searchParams.delete('code');
+        window.history.pushState({}, '', url);
+
+        const accessToken = await fetchAccessToken(code);
+        if (accessToken) {
+            // Save the access token securely, for example in sessionStorage
+            sessionStorage.setItem('gh_access_token', accessToken);
+            window.location.hash = '#home';
+            appState.setState({ loggedIn: true });
+        } else {
+            console.error('Failed to obtain access token');
+            window.location.hash = '#';
+        }
+    }
+};
+
+const fetchAccessToken = async (code) => {
+    const tokenResponse = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=accessToken', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+            code: code,
+            redirect: REDIRECT_URI
+        })
+    });
+
+    if (tokenResponse.ok) {
+        const jsonResponse = await tokenResponse.json();
+        return jsonResponse.access_token;
+    } else {
+        console.error('Failed to fetch access token', tokenResponse);
+        return null;
+    }
+};

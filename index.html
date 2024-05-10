@@ -27,16 +27,19 @@
                     
                 <ul class="nav nav-tabs" id="options" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="import-tab" data-bs-toggle="tab" data-bs-target="#import" type="button" role="tab" aria-controls="import" aria-selected="true">Import Dictionary</button>
+                        <button class="nav-link" id="import-tab" data-bs-toggle="tab" data-bs-target="#import" type="button" role="tab" aria-controls="import" aria-selected="true">Import Dictionary</button>
                     </li>
                   
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="export-tab" data-bs-toggle="tab" data-bs-target="#export" type="button" role="tab" aria-controls="export" aria-selected="false">Export Dictionary</button>
                     </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="auth-tab" data-bs-toggle="tab" data-bs-target="#auth" type="button" role="tab" aria-controls="auth" aria-selected="false">GitHub Auth</button>
+                    </li>
                 </ul>
                 
                 <div class="tab-content" id="optionsContent">
-                    <div class="tab-pane fade show active" id="import" role="tabpanel" aria-labelledby="import-tab">
+                    <div class="tab-pane fade" id="import" role="tabpanel" aria-labelledby="import-tab">
                         
                         <section id="usage">
                             
@@ -71,6 +74,17 @@
                                 </div>
                             </div>
                         </section>
+                    </div>
+
+                    <div class="tab-pane fade show active" id="auth" role="tabpanel" aria-labelledby="auth-tab">
+                        <div id="homepage">
+                            <h1>Homepage</h1>
+                            <button id="login">Login with GitHub</button>
+                        </div>
+                        <div id="callback" style="display: none;">
+                            <h1>Callback Page</h1>
+                            <p>Processing login...</p>
+                        </div>
                     </div>
                 </div>
         
