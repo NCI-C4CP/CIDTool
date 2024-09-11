@@ -4,7 +4,7 @@ import { parseColumns, structureDictionary, structureFiles } from "./utils/dicti
 import { appState } from "./utils/common.js";
 import { addEventAddFile } from "./utils/events.js";
 
-const local = true;
+const local = false;
 
 let CLIENT_ID = 'Ov23liVVaSBQIH0ahnn7'
 let REDIRECT_URI = 'http://localhost:5000/';
