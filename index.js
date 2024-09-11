@@ -2,9 +2,10 @@ import { assignConcepts } from "./utils/concepts.js";
 import { readSpreadsheet, readFiles, generateSpreadsheet } from "./utils/files.js";
 import { parseColumns, structureDictionary, structureFiles } from "./utils/dictionary.js";
 import { appState } from "./utils/common.js";
+import { addEventAddFile } from "./utils/events.js";
 
-const CLIENT_ID = 'Iv23liogHuXaHwzjvHUz'
-const REDIRECT_URI = 'http://localhost:5000/';
+const CLIENT_ID = 'Ov23liu5RSq1PMWSLLqh'
+const REDIRECT_URI = 'https://analyticsphere.github.io/CIDTool/';
 
 window.onload = async () => {
     router();
@@ -126,7 +127,7 @@ const login = () => {
     callback.style.display = 'none';    
 
     loginButton.addEventListener('click', () => {
-        const url = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}`;
+        const url = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=repo`;
         window.location.href = url;
     });
 }
@@ -139,6 +140,8 @@ const homePage = async () => {
     homepage.style.display = 'none';
     callback.style.display = '';
 
+    callback.innerHTML = `<h1>Please Wait...</h1>`;
+
     const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getUser', {
         method: 'GET',
         headers: {
@@ -150,11 +153,28 @@ const homePage = async () => {
 
     const data = await response.json();
 
-    callback.innerHTML = `<h1>Welcome ${data.data.name}</h1>`;
-    console.log();
+    console.log(data);
+
+    callback.innerHTML = `
+        <h1>Welcome ${data.data.name}</h1>
+        
+        <button id="addFile">Add File</button>
+    `;
+
+    addEventAddFile();
 }
 
 const handleCallback = async () => {
+
+    const homepage = document.getElementById('homepage');
+    const callback = document.getElementById('callback');
+    
+    homepage.style.display = 'none';
+    callback.style.display = '';
+
+    callback.innerHTML = `<h1>Fetching Access...</h1>`;
+
+
     const code = new URL(window.location.href).searchParams.get('code');
     if (code) {
         const url = new URL(window.location);
@@ -195,3 +215,25 @@ const fetchAccessToken = async (code) => {
         return null;
     }
 };
+
+export const addFile = async () => {
+    console.log()
+    const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=createFile', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+            owner: 'Davinkjohnson',
+            repo: 'AuthTest',
+            path: 'concepts/file.json',
+            message: 'modify file again',
+            content: 'eyJ0ZXN0aW5nIjogInN1Y2Nlc3MgYWdhaW4ifQ=='
+        })
+    });
+
+    const data = await response.json();
+    console.log(data);
+}
