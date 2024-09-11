@@ -4,8 +4,15 @@ import { parseColumns, structureDictionary, structureFiles } from "./utils/dicti
 import { appState } from "./utils/common.js";
 import { addEventAddFile } from "./utils/events.js";
 
-const CLIENT_ID = 'Ov23liu5RSq1PMWSLLqh'
-const REDIRECT_URI = 'https://analyticsphere.github.io/CIDTool/';
+const local = true;
+
+let CLIENT_ID = 'Ov23liVVaSBQIH0ahnn7'
+let REDIRECT_URI = 'http://localhost:5000/';
+
+if(!local) {
+    CLIENT_ID = 'Ov23liu5RSq1PMWSLLqh';
+    REDIRECT_URI = 'https://analyticsphere.github.io/CIDTool/';
+}
 
 window.onload = async () => {
     router();
@@ -142,7 +149,7 @@ const homePage = async () => {
 
     callback.innerHTML = `<h1>Please Wait...</h1>`;
 
-    const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getUser', {
+    const response = await fetch(`https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getUser`, {
         method: 'GET',
         headers: {
             Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
@@ -195,7 +202,7 @@ const handleCallback = async () => {
 };
 
 const fetchAccessToken = async (code) => {
-    const tokenResponse = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=accessToken', {
+    const tokenResponse = await fetch(`https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=accessToken${local ? '&environment=dev' : ''}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
