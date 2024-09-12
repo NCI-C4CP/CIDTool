@@ -50,3 +50,15 @@ const createStore = (initialState = {}) => {
 }
 
 export const appState = createStore();
+
+export const toBase64 = (string) => {
+    return btoa(string);
+}
+
+export const showAnimation = () => {
+    document.getElementById('loadingAnimation').style.display = '';
+}
+
+export const hideAnimation = () => {
+    document.getElementById('loadingAnimation').style.display = 'none';
+}

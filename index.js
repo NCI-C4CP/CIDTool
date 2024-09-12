@@ -1,17 +1,18 @@
-import { assignConcepts } from "./utils/concepts.js";
-import { readSpreadsheet, readFiles, generateSpreadsheet } from "./utils/files.js";
-import { parseColumns, structureDictionary, structureFiles } from "./utils/dictionary.js";
-import { appState } from "./utils/common.js";
-import { addEventAddFile } from "./utils/events.js";
+import { assignConcepts } from "./src/concepts.js";
+import { readSpreadsheet, readFiles, generateSpreadsheet } from "./src/files.js";
+import { parseColumns, structureDictionary, structureFiles } from "./src/dictionary.js";
+import { appState, hideAnimation, showAnimation } from "./src/common.js";
+import { getAccessToken } from "./src/api.js";
+import { login, loggedIn } from "./src/login.js";
 
-const local = false;
+export const local = true;
 
-let CLIENT_ID = 'Ov23liVVaSBQIH0ahnn7'
-let REDIRECT_URI = 'http://localhost:5000/';
+export let CLIENT_ID = 'Ov23liu5RSq1PMWSLLqh';
+export let REDIRECT_URI = 'https://analyticsphere.github.io/CIDTool/';
 
-if(!local) {
-    CLIENT_ID = 'Ov23liu5RSq1PMWSLLqh';
-    REDIRECT_URI = 'https://analyticsphere.github.io/CIDTool/';
+if(local) {
+    CLIENT_ID = 'Ov23liVVaSBQIH0ahnn7'
+    REDIRECT_URI = 'http://localhost:5000/';
 }
 
 window.onload = async () => {
@@ -24,10 +25,10 @@ window.onhashchange = () => {
 
 const router = async () => {
     
-    const { loggedIn } = appState.getState();
+    const { isLoggedIn } = appState.getState();
 
-    if(!loggedIn) {
-        appState.setState({ loggedIn: false });
+    if(!isLoggedIn) {
+        appState.setState({ isLoggedIn: false });
     }
 
     let route = window.location.hash || '#';
@@ -41,9 +42,9 @@ const router = async () => {
         await handleCallback();
     } else {
         // Continue with existing routing logic
-        if (loggedIn) {
+        if (isLoggedIn) {
             if (route === '#home') {
-                homePage();
+                loggedIn();
             } else {
                 window.location.hash = '#';
             }
@@ -83,7 +84,6 @@ const dictionary_export = async (event) => {
 }
 
 document.getElementById('input_dom_element').addEventListener('change', dictionary_import);
-
 document.getElementById('output_dom_element').addEventListener('change', dictionary_export);
 
 document.getElementById('directory_picker').addEventListener('click', async () => {
@@ -124,63 +124,9 @@ document.getElementById('input_dom_element').addEventListener('change', async ()
     appState.setState({ conceptObjects });
 });
 
-const login = () => {
-
-    const homepage = document.getElementById('homepage');
-    const callback = document.getElementById('callback');
-    const loginButton = document.getElementById('login');
-
-    homepage.style.display = '';
-    callback.style.display = 'none';    
-
-    loginButton.addEventListener('click', () => {
-        const url = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=repo`;
-        window.location.href = url;
-    });
-}
-
-const homePage = async () => {
-    
-    const homepage = document.getElementById('homepage');
-    const callback = document.getElementById('callback');
-    
-    homepage.style.display = 'none';
-    callback.style.display = '';
-
-    callback.innerHTML = `<h1>Please Wait...</h1>`;
-
-    const response = await fetch(`https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getUser`, {
-        method: 'GET',
-        headers: {
-            Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        }
-    });
-
-    const data = await response.json();
-
-    console.log(data);
-
-    callback.innerHTML = `
-        <h1>Welcome ${data.data.name}</h1>
-        
-        <button id="addFile">Add File</button>
-    `;
-
-    addEventAddFile();
-}
-
 const handleCallback = async () => {
 
-    const homepage = document.getElementById('homepage');
-    const callback = document.getElementById('callback');
-    
-    homepage.style.display = 'none';
-    callback.style.display = '';
-
-    callback.innerHTML = `<h1>Fetching Access...</h1>`;
-
+    showAnimation();
 
     const code = new URL(window.location.href).searchParams.get('code');
     if (code) {
@@ -188,59 +134,16 @@ const handleCallback = async () => {
         url.searchParams.delete('code');
         window.history.pushState({}, '', url);
 
-        const accessToken = await fetchAccessToken(code);
-        if (accessToken) {
-            // Save the access token securely, for example in sessionStorage
-            sessionStorage.setItem('gh_access_token', accessToken);
+        const tokenObject = await getAccessToken(code, local);
+        if (tokenObject?.access_token) {
+            sessionStorage.setItem('gh_access_token', tokenObject.access_token);
             window.location.hash = '#home';
-            appState.setState({ loggedIn: true });
+            appState.setState({ isLoggedIn: true });
         } else {
             console.error('Failed to obtain access token');
             window.location.hash = '#';
         }
     }
+
+    hideAnimation();
 };
-
-const fetchAccessToken = async (code) => {
-    const tokenResponse = await fetch(`https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=accessToken${local ? '&environment=dev' : ''}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-            code: code,
-            redirect: REDIRECT_URI
-        })
-    });
-
-    if (tokenResponse.ok) {
-        const jsonResponse = await tokenResponse.json();
-        return jsonResponse.access_token;
-    } else {
-        console.error('Failed to fetch access token', tokenResponse);
-        return null;
-    }
-};
-
-export const addFile = async () => {
-    console.log()
-    const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=createFile', {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-            owner: 'Davinkjohnson',
-            repo: 'AuthTest',
-            path: 'concepts/file.json',
-            message: 'modify file again',
-            content: 'eyJ0ZXN0aW5nIjogInN1Y2Nlc3MgYWdhaW4ifQ=='
-        })
-    });
-
-    const data = await response.json();
-    console.log(data);
-}
