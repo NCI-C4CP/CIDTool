@@ -104,3 +104,28 @@ export const deleteFile = async () => {
 
 
 }
+
+export const getFiles = async () => {
+
+    try {
+        const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getFiles', {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                owner: appState.getState().user.login,
+                repo,
+                path
+            })
+        });
+    
+        const data = await response.json();
+        return data;
+    }
+    catch (error) {
+        console.error(error);
+    }
+}

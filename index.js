@@ -5,7 +5,7 @@ import { appState, hideAnimation, showAnimation } from "./src/common.js";
 import { getAccessToken } from "./src/api.js";
 import { login, loggedIn } from "./src/login.js";
 
-export const local = true;
+export const local = false;
 
 export let CLIENT_ID = 'Ov23liu5RSq1PMWSLLqh';
 export let REDIRECT_URI = 'https://analyticsphere.github.io/CIDTool/';
