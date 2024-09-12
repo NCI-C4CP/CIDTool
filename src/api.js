@@ -55,7 +55,7 @@ export const addFile = async (repo, path, content) => {
                 'Accept': 'application/json',
             },
             body: JSON.stringify({
-                owner: appState.getState().user.login,
+                owner: 'anthonypetersen',
                 repo,
                 path,
                 message: 'file added via CID Tool',
