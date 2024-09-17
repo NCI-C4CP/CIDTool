@@ -2,18 +2,9 @@ import { assignConcepts } from "./src/concepts.js";
 import { readSpreadsheet, readFiles, generateSpreadsheet } from "./src/files.js";
 import { parseColumns, structureDictionary, structureFiles } from "./src/dictionary.js";
 import { appState, hideAnimation, showAnimation } from "./src/common.js";
-import { getAccessToken } from "./src/api.js";
-import { login, loggedIn } from "./src/login.js";
-
-export const local = false;
-
-export let CLIENT_ID = 'Ov23liu5RSq1PMWSLLqh';
-export let REDIRECT_URI = 'https://analyticsphere.github.io/CIDTool/';
-
-if(local) {
-    CLIENT_ID = 'Ov23liVVaSBQIH0ahnn7'
-    REDIRECT_URI = 'http://localhost:5000/';
-}
+import { getAccessToken, getFiles, getUserDetails } from "./src/api.js";
+import { login } from "./src/login.js";
+import { renderHomePage } from "./src/homepage.js";
 
 window.onload = async () => {
     router();
@@ -44,7 +35,27 @@ const router = async () => {
         // Continue with existing routing logic
         if (isLoggedIn) {
             if (route === '#home') {
-                loggedIn();
+                showAnimation();
+
+                const userData = await getUserDetails();
+                console.log(userData.data);
+
+                appState.setState({ user: userData.data });
+
+                // set welcomeUser div
+                document.getElementById('welcomeUser').innerHTML = `Welcome, <strong>${userData.data.name}</strong>`;
+
+
+                document.getElementById('welcomeUser').innerHTML = `
+                    Welcome, <strong>${userData.data.name}</strong>
+                    <img src="${userData.data.avatar_url}" class="rounded-circle" style="width: 30px; height: 30px; margin-right: 8px;">
+                `;
+
+                const fileData = await getFiles();
+                appState.setState({ files: fileData.data });
+
+                renderHomePage();
+                hideAnimation();
             } else {
                 window.location.hash = '#';
             }
@@ -83,6 +94,7 @@ const dictionary_export = async (event) => {
     generateSpreadsheet(structuredData);
 }
 
+/*
 document.getElementById('input_dom_element').addEventListener('change', dictionary_import);
 document.getElementById('output_dom_element').addEventListener('change', dictionary_export);
 
@@ -124,6 +136,8 @@ document.getElementById('input_dom_element').addEventListener('change', async ()
     appState.setState({ conceptObjects });
 });
 
+*/
+
 const handleCallback = async () => {
 
     showAnimation();
@@ -134,7 +148,7 @@ const handleCallback = async () => {
         url.searchParams.delete('code');
         window.history.pushState({}, '', url);
 
-        const tokenObject = await getAccessToken(code, local);
+        const tokenObject = await getAccessToken(code);
         if (tokenObject?.access_token) {
             sessionStorage.setItem('gh_access_token', tokenObject.access_token);
             window.location.hash = '#home';

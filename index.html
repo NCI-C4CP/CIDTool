@@ -1,7 +1,9 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
     <head>
-        <title>Sandbox Tools</title>
+        <title>Concept ID Tool</title>
         
+        <link rel="stylesheet" href="assets/css/style.css">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">        
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
         <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
@@ -10,35 +12,63 @@
     </head>
     
     <body>
+        <header>
+            <div class="navbar navbar-light bg-light py-2 position-relative" style="min-height: 50px;">
+                <div class="container-fluid d-flex justify-content-between align-items-center">
+                    
+                    <!-- Left side: Can remain empty or for future use -->
+                    <div></div>
+        
+                    <!-- Center: App Name, absolutely positioned -->
+                    <div class="position-absolute top-50 start-50 translate-middle">
+                        <span class="navbar-brand mb-0 h1">Concept ID Tool</span>
+                    </div>
+        
+                    <!-- Right side: Welcome message for logged-in user, centered vertically and horizontally -->
+                    <div class="d-flex align-items-center justify-content-center" style="min-height: 50px;">
+                        <span class="navbar-text" id="welcomeUser">
+                            <!-- Empty at first, will be populated -->
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main container for content -->
+        <div class="container mt-4">
+            <div id="auth"></div>
+        </div>
+
+        <!-- Spinner for loading -->
+        <div class="spinner-wrapper">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+
+        <!--
+
         <div class="container-fluid">
             <div class="container">
-            
-                <section id="header">
-                    <h1>
-                        CID Tools
-                        <br>
-                        <span style="font-size:small;color:blue">
-                            [<a href="https://github.com/Analyticsphere/CIDTool" target="_blank">code</a>] 
-                        </span>
-                    </h1> 
-                    
-                    <hr>
-                </section>
                     
                 <ul class="nav nav-tabs" id="options" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="import-tab" data-bs-toggle="tab" data-bs-target="#import" type="button" role="tab" aria-controls="import" aria-selected="true">Import Dictionary</button>
+                        <button class="nav-link active" id="auth-tab" data-bs-toggle="tab" data-bs-target="#auth" type="button" role="tab" aria-controls="auth" aria-selected="true">GitHub</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="import-tab" data-bs-toggle="tab" data-bs-target="#import" type="button" role="tab" aria-controls="import" aria-selected="false">Import Dictionary</button>
                     </li>
                   
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="export-tab" data-bs-toggle="tab" data-bs-target="#export" type="button" role="tab" aria-controls="export" aria-selected="false">Export Dictionary</button>
                     </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="auth-tab" data-bs-toggle="tab" data-bs-target="#auth" type="button" role="tab" aria-controls="auth" aria-selected="false">GitHub Auth</button>
-                    </li>
                 </ul>
                 
                 <div class="tab-content" id="optionsContent">
+                    <div class="tab-pane fade show active" id="auth" role="tabpanel" aria-labelledby="auth-tab">
+
+                    </div>
+
                     <div class="tab-pane fade" id="import" role="tabpanel" aria-labelledby="import-tab">
                         
                         <section id="usage">
@@ -75,19 +105,11 @@
                             </div>
                         </section>
                     </div>
-
-                    <div class="tab-pane fade show active" id="auth" role="tabpanel" aria-labelledby="auth-tab">
-
-                    </div>
                 </div>
         
             </div>
-
-            <div class="d-flex justify-content-center align-items-center">
-                <div id="loadingAnimation" class="spinner-border text-primary" role="status" style="display: none;"></div>
-            </div>
         </div>
 
-        
+    -->
     </body>
 </html>

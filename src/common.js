@@ -55,10 +55,18 @@ export const toBase64 = (string) => {
     return btoa(string);
 }
 
+export const fromBase64 = (string) => {
+    return atob(string);
+}
+
 export const showAnimation = () => {
-    document.getElementById('loadingAnimation').style.display = '';
+    document.querySelector('.spinner-wrapper').style.display = 'flex';
 }
 
 export const hideAnimation = () => {
-    document.getElementById('loadingAnimation').style.display = 'none';
+    document.querySelector('.spinner-wrapper').style.display = 'none';
+}
+
+export const isLocal = () => {
+    return window.location.href.includes('localhost');
 }
