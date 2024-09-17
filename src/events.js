@@ -27,7 +27,9 @@ export const addEventLoginButtonClick = () => {
     let id;
     let uri;
 
-    if (isLocal) {
+    let local = isLocal();
+
+    if (local) {
         id = CLIENT_ID_LOCAL;
         uri = REDIRECT_URI_LOCAL;
     }
