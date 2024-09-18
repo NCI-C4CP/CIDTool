@@ -51,10 +51,7 @@ const router = async () => {
                     <img src="${userData.data.avatar_url}" class="rounded-circle" style="width: 30px; height: 30px; margin-right: 8px;">
                 `;
 
-                const fileData = await getFiles();
-                appState.setState({ files: fileData.data });
-
-                renderHomePage();
+                await renderHomePage();
                 hideAnimation();
             } else {
                 window.location.hash = '#';

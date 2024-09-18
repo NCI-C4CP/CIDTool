@@ -1,24 +1,5 @@
-import { renderAddFile, renderHomePage } from './homepage.js';
 import { isLocal } from './common.js';
 import { CLIENT_ID, REDIRECT_URI, CLIENT_ID_LOCAL, REDIRECT_URI_LOCAL } from '../config.js';
-
-export const addEventAddFile = () => {
-    const button = document.getElementById('addFile');
-    if(!button) return;
-
-    button.addEventListener('click', async () => {
-        renderAddFile();
-    });
-}
-
-export const addEventModifyFile = () => {
-    const button = document.getElementById('modifyFile');
-    if(!button) return;
-
-    button.addEventListener('click', async () => {
-        renderHomePage();
-    });
-}
 
 export const addEventLoginButtonClick = () => {
     const loginButton = document.getElementById('login');

@@ -1,8 +1,12 @@
-import { addEventAddFile, addEventModifyFile } from './events.js';
-import { showAnimation, hideAnimation, fromBase64, appState } from './common.js';
-import { addFile, updateFile } from './api.js';
+import { appState } from './common.js';
+import { getFiles } from './api.js';
+import { renderAddModal, renderModifyModal, renderDeleteModal } from './modals.js';
 
-export const renderHomePage = () => {
+export const renderHomePage = async () => {
+    
+    const fileData = await getFiles();
+    appState.setState({ files: fileData.data });
+    
     renderSearchBar();
     renderFileList();
 }
@@ -36,11 +40,22 @@ const renderSearchBar = () => {
         const searchTerm = event.target.value.toLowerCase();
         renderFileList(searchTerm);  // Pass the search term to filter files
     });
+
+    // Attach add file event listener once
+    const addFileButton = document.getElementById('addFile');
+    addFileButton.addEventListener('click', () => {
+        renderAddModal();
+    });
 };
 
 const renderFileList = (searchTerm = '') => {
     const fileListDiv = document.getElementById('fileList');
     const files = appState.getState().files;
+
+    // If no files, display message
+    if (!files || files.length === 0) {
+       return;
+    }
 
     // Filter files based on the search term
     const filteredFiles = files.filter(file =>
@@ -55,10 +70,10 @@ const renderFileList = (searchTerm = '') => {
                 </div>
                 <div class="col-3"></div> <!-- Empty space -->
                 <div class="col-3 text-end">
-                    <button class="btn btn-outline-primary btn-sm modifyFileBtn" data-file="${file}">
+                    <button class="btn btn-outline-primary btn-sm modifyFileBtn" data-bs-file="${file.name}">
                         <i class="bi bi-pencil"></i> Modify
                     </button>
-                    <button class="btn btn-outline-danger btn-sm deleteFileBtn" data-file="${file}">
+                    <button class="btn btn-outline-danger btn-sm deleteFileBtn" data-bs-file="${file.name}" data-bs-sha="${file.sha}">
                         <i class="bi bi-trash"></i> Delete
                     </button>
                 </div>
@@ -66,109 +81,19 @@ const renderFileList = (searchTerm = '') => {
         `).join('')}
     `;
 
-    // Add event listeners for Modify buttons
+    // for each modify button, add listener to render modify modal
     const modifyButtons = document.querySelectorAll('.modifyFileBtn');
     modifyButtons.forEach(button => {
-        button.addEventListener('click', (event) => {
-            const fileId = event.currentTarget.getAttribute('data-file');
-            console.log(`Modify button clicked for file ID: ${fileId}`);
+        button.addEventListener('click', event => {
+            renderModifyModal(event);
         });
     });
 
-    // Add event listeners for Delete buttons
+    // for each delete button, add listener to render delete modal
     const deleteButtons = document.querySelectorAll('.deleteFileBtn');
     deleteButtons.forEach(button => {
-        button.addEventListener('click', (event) => {
-            const fileId = event.currentTarget.getAttribute('data-file');
-            console.log(`Delete button clicked for file ID: ${fileId}`);
+        button.addEventListener('click', event => {
+            renderDeleteModal(event);
         });
     });
 };
-
-export const renderAddFile = () => {
-    const authDiv = document.getElementById('auth');
-
-    authDiv.innerHTML = `
-        <h1>Add Concept</h1>
-        <input type="text" id="conceptID" placeholder="Concept ID">
-        <input type="text" id="conceptName" placeholder="Concept Name">
-        <button id="addFileButton">Submit</button>
-    `;
-
-    const addFileButton = document.getElementById('addFileButton');
-
-    addFileButton.addEventListener('click', async () => {
-        const conceptID = document.getElementById('conceptID').value;
-        const conceptName = document.getElementById('conceptName').value;
-
-        const infoObject = {
-            id: conceptID,
-            name: conceptName
-        };
-
-        const path = `${conceptID}.json`;
-        const content = JSON.stringify(infoObject);
-
-        showAnimation();
-        const check = await addFile(path, content);
-        hideAnimation();
-
-        console.log(check);
-    });
-}
-
-const renderModifyFile = (fileContent) => {
-
-    const authDiv = document.getElementById('auth');
-    const jsonContent = fromBase64(fileContent.data.content);
-
-    const { id, name } = JSON.parse(jsonContent);
-
-    authDiv.innerHTML = `
-        <h1>Modify Concept</h1>
-        <div class="container">
-            <div class="row mb-3">
-                <div class="col-4 text-start">
-                    <label>Concept ID</label>
-                </div>
-                <div class="col-8">
-                    <input type="text" id="conceptID" class="form-control" value="${id}">
-                </div>
-            </div>
-            <div class="row mb-3">
-                <div class="col-4 text-start">
-                    <label>Concept Name</label>
-                </div>
-                <div class="col-8">
-                    <input type="text" id="conceptName" class="form-control" value="${name}">
-                </div>
-            </div>
-            <div class="row mt-4">
-                <div class="col-6">
-                    <button id="backButton" class="btn btn-secondary w-100">Back</button>
-                </div>
-                <div class="col-6">
-                    <button id="saveButton" class="btn btn-success w-100">Save</button>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.getElementById('backButton').addEventListener('click', async () => {
-        renderFileList();
-    });
-
-    document.getElementById('saveButton').addEventListener('click', async () => {
-        const updatedID = document.getElementById('conceptID').value;
-        const updatedName = document.getElementById('conceptName').value;
-
-        const payload = {
-            id: updatedID,
-            name: updatedName
-        };
-
-        showAnimation();
-        await updateFile(fileContent.data.path, JSON.stringify(payload), fileContent.data.sha);
-        hideAnimation();
-    });
-}

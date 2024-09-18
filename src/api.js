@@ -111,9 +111,31 @@ export const updateFile = async (path, content, sha) => {
 
 }
 
-export const deleteFile = async () => {
+export const deleteFile = async (path, sha) => {
 
-
+    try {
+        const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=deleteFile', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                owner: OWNER,
+                repo: REPO,
+                path: PATH + '/' + path,
+                sha,
+                message: 'file deleted via CID Tool'
+            })
+        });
+    
+        const data = await response.json();
+        return data;
+    }
+    catch (error) {
+        console.error(error);
+    }
 }
 
 export const getFiles = async (fileName) => {
