@@ -1,4 +1,4 @@
-import { appState } from './common.js';
+import { appState, hideAnimation, showAnimation } from './common.js';
 import { getFiles } from './api.js';
 import { renderAddModal, renderModifyModal, renderDeleteModal } from './modals.js';
 

@@ -1,5 +1,7 @@
 import { showAnimation, hideAnimation, fromBase64 } from './common.js';
 import { addFile, updateFile, deleteFile, getFiles } from './api.js';
+import { fields } from '../config.js';
+import { renderHomePage } from './homepage.js';
 
 export const renderAddModal = () => {
 
@@ -12,43 +14,66 @@ export const renderAddModal = () => {
         <h5 class="modal-title">Add Concept</h5>
     `;
 
-    modalBody.innerHTML = `
-        <!-- Dropdown for Concept Type -->
-        <div class="row mb-3">
-            <div class="col-4">
-                <label for="conceptType" class="col-form-label">Concept Type</label>
-            </div>
-            <div class="col-8">
-                <select class="form-select" id="conceptType">
-                    <option value="Primary Source">Primary Source</option>
-                    <option value="Secondary Source">Secondary Source</option>
-                    <option value="Source Question">Source Question</option>
-                    <option value="Question">Question</option>
-                    <option value="Response">Response</option>
-                </select>
-            </div>
-        </div>
+    // Initial dropdown value
+    let selectedOption = "Primary Source";
 
-        <!-- Input for Concept ID -->
-        <div class="row mb-3">
-            <div class="col-4">
-                <label for="fileId" class="col-form-label" id="labelFileId">Concept ID</label>
+    const renderFields = (option) => {
+        selectedOption = option; // Update selected option
+        
+        // Render dropdown menu
+        modalBody.innerHTML = `
+            <div class="row mb-3">
+                <div class="col-4">
+                    <label for="dropdownMenu" class="col-form-label">Select Type</label>
+                </div>
+                <div class="col-8">
+                    <select id="dropdownMenu" class="form-select">
+                        <option value="Primary Source" ${selectedOption === 'Primary Source' ? 'selected' : ''}>Primary Source</option>
+                        <option value="Secondary Source" ${selectedOption === 'Secondary Source' ? 'selected' : ''}>Secondary Source</option>
+                        <option value="Source Question" ${selectedOption === 'Source Question' ? 'selected' : ''}>Source Question</option>
+                        <option value="Question" ${selectedOption === 'Question' ? 'selected' : ''}>Question</option>
+                        <option value="Response" ${selectedOption === 'Response' ? 'selected' : ''}>Response</option>
+                    </select>
+                </div>
             </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="fileId" placeholder="Enter Concept ID">
-            </div>
-        </div>
+        `;
+    
+        // Append the dynamic fields based on the selected option
+        const selectedConfig = fields[option];
+        if (selectedConfig) {
+            selectedConfig.forEach(field => {
+                if (field.type === 'concept') {
 
-        <!-- Input for Concept Name -->
-        <div class="row mb-3">
-            <div class="col-4">
-                <label for="fileName" class="col-form-label" id="labelFileName">Concept Name</label>
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="fileName" placeholder="Enter Concept Name">
-            </div>
-        </div>
-    `;
+                }
+                else {
+                    
+                }
+                modalBody.innerHTML += `
+                    <div class="row mb-3">
+                        <div class="col-4">
+                            <label for="${field.id}" class="col-form-label">
+                                ${field.label} ${field.required ? '*' : ''}
+                            </label>
+                        </div>
+                        <div class="col-8">
+                            ${field.type === "select" 
+                                ? `<select class="form-select" id="${field.id}">
+                                      ${field.options.map(option => `<option value="${option}">${option}</option>`).join('')}
+                                   </select>`
+                                : `<input type="${field.type}" class="form-control" id="${field.id}" ${field.required ? 'required' : ''}>`}
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    
+        // Add event listener to dropdown to re-render fields on change
+        const dropdown = document.getElementById('dropdownMenu');
+        dropdown.addEventListener('change', (e) => renderFields(e.target.value));
+    };
+
+    // Initially render fields for the default dropdown option
+    renderFields(selectedOption);
 
     modalFooter.innerHTML = `
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -57,40 +82,33 @@ export const renderAddModal = () => {
 
     new bootstrap.Modal(modal).show();
 
-    // Function to update labels based on the selected dropdown option
-    const updateLabels = (selectedValue) => {
-        document.getElementById('labelFileId').textContent = `${selectedValue} ID`;
-        document.getElementById('labelFileName').textContent = `${selectedValue} Name`;
-    };
-
     // Add event listener to dropdown to change labels dynamically
-    const conceptTypeSelect = document.getElementById('conceptType');
-    conceptTypeSelect.addEventListener('change', (event) => {
-        const selectedValue = event.target.value;
-        updateLabels(selectedValue);
+    document.getElementById('dropdownMenu').addEventListener('change', (event) => {
+        const selectedOption = event.target.value;
+        renderFields(selectedOption);
     });
-
-    // Initialize labels based on the default selected dropdown option
-    updateLabels(conceptTypeSelect.value);
 
     // Add event listener for the save button
     const confirmButton = modal.querySelector('.btn-outline-success');
     confirmButton.addEventListener('click', async () => {
-        const conceptType = document.getElementById('conceptType').value;
-        const id = document.getElementById('fileId').value;
-        const name = document.getElementById('fileName').value;
+       
+        const conceptType = document.getElementById('dropdownMenu').value;
+        const selectedFields = fields[conceptType] || [];
 
         const payload = {
-            type: conceptType,
-            id,
-            name
+            type: conceptType
         };
 
-        const path = `${id}.json`;
+        selectedFields.forEach(field => {
+            const fieldValue = document.getElementById(field.id).value;
+            payload[field.id] = fieldValue;
+        });
+
+        const path = `${payload.concept}.json`;
         const content = JSON.stringify(payload);
-        
+
         showAnimation();
-        
+
         await addFile(path, content);
 
         bootstrap.Modal.getInstance(modal).hide();
@@ -141,6 +159,9 @@ export const renderDeleteModal = (event) => {
 }
 
 export const renderModifyModal = async (event) => {
+
+    showAnimation();
+
     const button = event.target;
     const file = button.getAttribute('data-bs-file');
 
@@ -203,4 +224,6 @@ export const renderModifyModal = async (event) => {
         renderHomePage();
         hideAnimation();
     });
+
+    hideAnimation();
 }
