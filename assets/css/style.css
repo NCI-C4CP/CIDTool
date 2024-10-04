@@ -10,3 +10,28 @@
     justify-content: center;
     align-items: center;
 }
+
+/* Drop Zone Styles */
+#drop-zone {
+    border: 2px dashed #6c757d;
+    cursor: pointer;
+    transition: background-color 0.3s, border-color 0.3s;
+}
+
+#drop-zone:hover {
+    background-color: #f8f9fa;
+}
+
+#drop-zone.drag-over {
+    background-color: #e9ecef;
+    border-color: #007bff;
+}
+
+/* Prevent child elements from capturing pointer events during drag */
+#drop-zone * {
+    pointer-events: none;
+}
+
+#drop-zone button {
+    pointer-events: auto;
+}
