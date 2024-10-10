@@ -1,6 +1,6 @@
 import { REDIRECT_URI, REDIRECT_URI_LOCAL } from '../config.js';
-import { toBase64, appState, isLocal } from './common.js';
-import { OWNER, REPO, PATH } from '../config.js';
+import { toBase64, isLocal } from './common.js';
+import { OWNER, REPO } from '../config.js';
 
 export const getUserDetails = async () => {
     
@@ -55,6 +55,26 @@ export const getAccessToken = async (code) => {
     }
 }
 
+export const getRepoContents = async () => {
+
+    try {
+        const response = await fetch(`https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getRepo&owner=${OWNER}&repo=${REPO}`, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
+        });
+        
+        const data = await response.blob();
+        return data;
+    }
+    catch (error) {
+        console.error(error);
+    }
+}
+
 export const addFile = async (path, content) => {
     
     try {
@@ -68,7 +88,7 @@ export const addFile = async (path, content) => {
             body: JSON.stringify({
                 owner: OWNER,
                 repo: REPO,
-                path: PATH + '/' + path,
+                path,
                 message: 'file added via CID Tool',
                 content: toBase64(content)
             })
@@ -124,7 +144,7 @@ export const deleteFile = async (path, sha) => {
             body: JSON.stringify({
                 owner: OWNER,
                 repo: REPO,
-                path: PATH + '/' + path,
+                path,
                 sha,
                 message: 'file deleted via CID Tool'
             })
@@ -141,7 +161,7 @@ export const deleteFile = async (path, sha) => {
 export const getFiles = async (fileName) => {
 
     try {
-        const url = `https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getFiles&owner=${OWNER}&repo=${REPO}&path=${PATH}${fileName ? '/' + fileName : ''}`;
+        const url = `https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getFiles&owner=${OWNER}&repo=${REPO}&path=${fileName ? '/' + fileName : ''}`;
 
         const response = await fetch(url, {
             method: 'GET',

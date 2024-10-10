@@ -3,6 +3,7 @@ import { CLIENT_ID, REDIRECT_URI, CLIENT_ID_LOCAL, REDIRECT_URI_LOCAL } from '..
 import { readSpreadsheet, readFiles, generateSpreadsheet } from "./files.js";
 import { parseColumns, structureDictionary, structureFiles } from "./dictionary.js";
 import { assignConcepts } from "./concepts.js";
+import { renderUploadModal } from "./modals.js";
 
 export const addEventLoginButtonClick = () => {
     const loginButton = document.getElementById('login');
@@ -127,6 +128,29 @@ const handleFile = async (handle) => {
             console.log(`JSON file "${name}" saved successfully`);
         });
     });
+
+    const { isLoggedIn } = appState.getState();
+
+    if(isLoggedIn) {
+        // Enable the Remote Save Button
+        const remoteSaveButton = document.getElementById('remote-save-button');
+        remoteSaveButton.disabled = false;
+        remoteSaveButton.removeAttribute('hidden');
+
+        remoteSaveButton.addEventListener('click', async () => {
+            const { conceptObjects } = appState.getState();
+            const files = conceptObjects.map((conceptObject) => {
+                const name = `${conceptObject.conceptID}.json`;
+                const content = JSON.stringify(conceptObject);
+                return { name, content };
+            });
+
+            // Sort files by name
+            files.sort((a, b) => a.name.localeCompare(b.name));
+
+            renderUploadModal(files);
+        });
+    }
 
 }
 
