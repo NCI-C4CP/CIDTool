@@ -224,7 +224,7 @@ export const renderModifyModal = async (event) => {
             } else {
                 fieldRow.innerHTML = `
                     <div class="col-4">
-                        <input type="text" class="form-control" placeholder="Key" id="${fieldId}_key" required>
+                        <input type="text" class="form-control" placeholder="Field" id="${fieldId}_key" required>
                     </div>
                     <div class="col-7">
                         <input type="text" class="form-control" placeholder="Value" id="${fieldId}_value">
