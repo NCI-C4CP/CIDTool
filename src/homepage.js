@@ -1,11 +1,13 @@
 import { appState, executeWithAnimation, fromBase64 } from './common.js';
 import { getFiles, getRepoContents, getUserRepositories } from './api.js';
-import { renderAddModal, renderModifyModal, renderDeleteModal } from './modals.js';
+import { renderAddModal, renderModifyModal, renderDeleteModal, renderAddFolderModal } from './modals.js';
 import { generateSpreadsheet } from './files.js';
 import { structureFiles } from './dictionary.js';
 
 export const renderHomePage = async () => {
     
+    appState.setState({ files: [], index: {}, currentPage: 1, itemsPerPage: 10 });
+
     const repos = await getUserRepositories();
     const homeDiv = document.getElementById('auth');
 
@@ -117,10 +119,18 @@ const renderSearchBar = () => {
         <div class="container mt-5">
             <!-- Top bar with search and add button -->
             <div class="row mb-3">
-                <div class="col-6">
-                    <input type="text" id="searchFiles" class="form-control" placeholder="Search files...">
+                <div class="col-4">
+                    <div class="d-flex align-items-center">
+                        <input type="text" id="searchFiles" class="form-control form-control me-2 flex-grow-1" placeholder="Search files...">
+                        <button id="refreshButton" class="btn btn-outline-secondary btn flex-shrink-0">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
                 </div>
-                <div class="col-6 d-flex justify-content-end">
+                <div class="col-8 d-flex justify-content-end">
+                    <button id="addFolder" class="btn btn-secondary me-2">
+                        <i class="bi bi-folder-plus"></i> Add Folder
+                    </button>
                     <button id="addFile" class="btn btn-primary me-2">
                         <i class="bi bi-plus-lg"></i> Add Concept
                     </button>
@@ -145,10 +155,22 @@ const renderSearchBar = () => {
         renderFileList(searchTerm);  // Pass the search term to filter files
     });
 
+    // Attach add folder event listener
+    const addFolderButton = document.getElementById('addFolder');
+    addFolderButton.addEventListener('click', () => {
+        renderAddFolderModal();
+    });
+
     // Attach add file event listener once
     const addFileButton = document.getElementById('addFile');
     addFileButton.addEventListener('click', () => {
         renderAddModal();
+    });
+
+    // Attach refresh event listener
+    const refreshButton = document.getElementById('refreshButton');
+    refreshButton.addEventListener('click', async () => {
+        refreshHomePage();
     });
 
     const downloadRepoButton = document.getElementById('downloadRepo');
@@ -214,6 +236,18 @@ const renderFileList = (searchTerm = '') => {
         );
     });
 
+    // Sort so that directories come first
+    filteredFiles.sort((a, b) => {
+        if (a.type === 'dir' && b.type !== 'dir') {
+            return -1;
+        } else if (a.type !== 'dir' && b.type === 'dir') {
+            return 1;
+        } else {
+            // If both are of the same type, you can sort alphabetically (optional)
+            return a.name.localeCompare(b.name);
+        }
+    });
+
     // Calculate pagination
     const totalItems = filteredFiles.length;
     const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -239,14 +273,19 @@ const renderFileList = (searchTerm = '') => {
             if (file.type === 'dir') {
                 // Render directory item
                 return `
-                    <div class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <i class="bi bi-folder-fill text-warning"></i>
-                            <strong>${file.name}</strong>
+                    <div class="list-group-item d-flex align-items-center">
+                        <div class="d-flex flex-column flex-grow-1 me-3 overflow-hidden">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-folder-fill text-warning me-2"></i>
+                                <strong class="text-truncate">${file.name}</strong>
+                            </div>
+                            <small class="text-muted text-truncate">&nbsp;</small>
                         </div>
-                        <button class="btn btn-outline-primary btn-sm openDirBtn" data-path="${file.name}">
-                            <i class="bi bi-arrow-right"></i> Open
-                        </button>
+                        <div class="d-flex flex-shrink-0">
+                            <button class="btn btn-outline-primary btn-sm openDirBtn" data-path="${file.name}">
+                                <i class="bi bi-arrow-right"></i> Open
+                            </button>
+                        </div>
                     </div>
                 `;
             } else {
@@ -360,3 +399,11 @@ const renderPaginationControls = (totalPages, currentPage) => {
         });
     });
 };
+
+export const refreshHomePage = async () => {
+    
+    const { repo, directory } = appState.getState();
+    if (repo) {
+        await executeWithAnimation(renderRepoContent, repo, directory || '');
+    }
+}

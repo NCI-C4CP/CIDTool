@@ -115,6 +115,43 @@ export const addFile = async (fileName, content) => {
     }
 }
 
+export const addFolder = async (folderName) => {
+
+    const state = appState.getState();
+    const { owner, repoName, directory } = state;
+
+    let path = '';
+    if (directory) {
+        path = directory + '/';
+    }
+    
+    path = path + folderName + '/.gitkeep';
+
+    try {
+        const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=addFile', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                owner: owner,
+                repo: repoName,
+                path,
+                message: 'folder added via CID Tool',
+                content: toBase64('')
+            })
+        });
+    
+        const data = await response.json();
+        return data;
+    }
+    catch (error) {
+        console.error(error);
+    }
+}
+
 export const updateFile = async (fileName, content, sha) => {
 
     const state = appState.getState();

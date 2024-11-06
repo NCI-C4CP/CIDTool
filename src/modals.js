@@ -1,6 +1,6 @@
 import { showAnimation, hideAnimation, fromBase64 } from './common.js';
-import { addFile, updateFile, deleteFile, getFiles } from './api.js';
-import { renderHomePage } from './homepage.js';
+import { addFile, updateFile, deleteFile, getFiles, addFolder } from './api.js';
+import { refreshHomePage, renderHomePage } from './homepage.js';
 
 export const renderAddModal = () => {
 
@@ -121,7 +121,7 @@ export const renderAddModal = () => {
             // Hide the modal
             bootstrap.Modal.getInstance(modal).hide();
             // Refresh the home page (assuming renderHomePage is defined elsewhere)
-            renderHomePage();
+            refreshHomePage();
         } catch (error) {
             console.error('Error adding file:', error);
             alert('An error occurred while saving the concept.');
@@ -167,7 +167,7 @@ export const renderDeleteModal = (event) => {
 
         bootstrap.Modal.getInstance(modal).hide();
 
-        renderHomePage();
+        refreshHomePage();
         hideAnimation();
     });
 }
@@ -421,5 +421,79 @@ export const renderUploadModal = async (files) => {
         bootstrap.Modal.getInstance(modal).hide();
         await renderHomePage();
         hideAnimation();
+    });
+}
+
+export const renderAddFolderModal = () => {
+
+    const modal = document.getElementById('modal');
+    const modalHeader = modal.querySelector('.modal-header');
+    const modalBody = modal.querySelector('.modal-body');
+    const modalFooter = modal.querySelector('.modal-footer');
+
+    // Set the modal title
+    modalHeader.innerHTML = `
+        <h5 class="modal-title">Add Folder</h5>
+    `;
+
+    // Initialize the modal body with Folder Name field
+    modalBody.innerHTML = `
+        <div class="row mb-3">
+            <div class="col-4">
+                <label for="folderName" class="col-form-label">Folder Name*</label>
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="folderName" required>
+            </div>
+        </div>
+    `;
+
+    // Update the modal footer with Cancel and Create buttons
+    modalFooter.innerHTML = `
+        <div class="w-100 d-flex justify-content-end">
+            <button type="button" class="btn btn-outline-secondary me-2" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-outline-success">Create</button>
+        </div>
+    `;
+
+    // Show the modal
+    new bootstrap.Modal(modal).show();
+
+    // Add event listener for the Create button
+    const createButton = modal.querySelector('.btn-outline-success');
+    createButton.addEventListener('click', async () => {
+        // Get the folder name
+        const folderName = document.getElementById('folderName').value.trim();
+
+        // Validate the folder name
+        if (!folderName) {
+            alert('Folder Name is required.');
+            return;
+        }
+
+        // Optional: Validate folder name for illegal characters
+        const illegalChars = /[\\/:*?"<>|]/;
+        if (illegalChars.test(folderName)) {
+            alert('Folder Name contains illegal characters.');
+            return;
+        }
+
+        // Show loading animation (assuming this function exists)
+        showAnimation();
+
+        // Create the folder (assuming addFolder is defined elsewhere)
+        try {
+            await addFolder(folderName);
+            // Hide the modal
+            bootstrap.Modal.getInstance(modal).hide();
+            // Refresh the home page (assuming renderHomePage is defined elsewhere)
+            refreshHomePage();
+        } catch (error) {
+            console.error('Error creating folder:', error);
+            alert('An error occurred while creating the folder.');
+        } finally {
+            // Hide loading animation
+            hideAnimation();
+        }
     });
 }
