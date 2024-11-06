@@ -42,6 +42,7 @@ export const addEventFileDrop = () => {
         dropZone.classList.remove('drag-over');
     }
 
+    /*
     // Prevent default drag behaviors
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropZone.addEventListener(eventName, preventDefaults, false);
@@ -59,6 +60,7 @@ export const addEventFileDrop = () => {
     ['dragleave', 'drop'].forEach(eventName => {
         dropZone.addEventListener(eventName, unhighlight, false);
     });
+    */
 }
 
 const preventDefaults = (e) => {

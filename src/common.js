@@ -70,3 +70,12 @@ export const hideAnimation = () => {
 export const isLocal = () => {
     return window.location.href.includes('localhost');
 }
+
+export const executeWithAnimation = async (func, ...args) => {
+    showAnimation();
+    try {
+        await func(...args);
+    } finally {
+        hideAnimation();
+    }
+};
