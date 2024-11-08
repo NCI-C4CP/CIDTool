@@ -1,5 +1,4 @@
 # CIDTool
-A tool for manipulating the Connect for Cancer data dictionary.
 
 Box folder: https://nih.app.box.com/folder/117864527386
 
