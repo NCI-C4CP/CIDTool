@@ -2,7 +2,7 @@ import { appState, hideAnimation, showAnimation } from "./src/common.js";
 import { getAccessToken, getUserDetails } from "./src/api.js";
 import { login } from "./src/login.js";
 import { renderHomePage } from "./src/homepage.js";
-import { addEventFileDrop } from "./src/events.js";
+import { addEventFileDrop, addEventDropClicked } from "./src/events.js";
 
 window.onload = async () => {
     router();
@@ -12,6 +12,7 @@ window.onhashchange = () => {
     router();
 }
 
+addEventDropClicked();
 addEventFileDrop();
 
 const router = async () => {
@@ -100,64 +101,3 @@ const handleCallback = async () => {
 
     hideAnimation();
 };
-
-// Ensure the code runs after the DOM is fully loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Get the import button
-    const importButton = document.getElementById('import-button');
-
-    // Get the import modal element
-    const importModalElement = document.getElementById('importModal');
-
-    // Create a Bootstrap modal instance for the import modal
-    const importModal = new bootstrap.Modal(importModalElement, {
-        backdrop: 'static',
-    });
-
-    // Add click event listener to the import button
-    importButton.addEventListener('click', () => {
-        importModal.show();
-    });
-
-    // Drag and Drop Functionality within the Import Modal
-    const dropZone = document.getElementById('drop-zone');
-    const saveButton = document.getElementById('save-button');
-    const remoteSaveButton = document.getElementById('remote-save-button');
-
-    // Add event listeners for drag and drop
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('dragover');
-    });
-
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('dragover');
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        const files = e.dataTransfer.files;
-        // Handle the dropped files
-        handleFiles(files);
-    });
-
-    // Define the handleFiles function
-    const handleFiles = (files) => {
-        // Your logic to process the files
-        // Enable the save buttons
-        saveButton.hidden = false;
-        saveButton.disabled = false;
-        remoteSaveButton.hidden = false;
-        remoteSaveButton.disabled = false;
-    };
-
-    // Event listeners for save buttons
-    saveButton.addEventListener('click', () => {
-        // Logic to generate dictionary
-    });
-
-    remoteSaveButton.addEventListener('click', () => {
-        // Logic to save to GitHub
-    });
-});

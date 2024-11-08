@@ -79,3 +79,8 @@ export const executeWithAnimation = async (func, ...args) => {
         hideAnimation();
     }
 };
+
+export const preventDefaults = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+}

@@ -89,13 +89,13 @@ const renderRepoContent = async (repo, directory) => {
         const indexFile = files.find(file => file.name === 'index.json');
 
         if (indexFile) {
-            const indexResponse = await getFiles(indexFile.path); // Assuming getFiles can fetch individual files
+            const indexResponse = await getFiles(indexFile.name); // Assuming getFiles can fetch individual files
             const indexContentString = fromBase64(indexResponse.data.content);
             indexContent = JSON.parse(indexContentString);
         }
 
         // Exclude index.json from the files list
-        let filesWithoutIndex = files.filter(file => file.name !== 'index.json');
+        let filesWithoutIndex = files.filter(file => file.name !== 'index.json').filter(file => file.name !== '.gitkeep');
 
         // If 'index.json' does NOT exist, display only directories
         if (!indexFile) {
