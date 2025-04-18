@@ -1,3 +1,5 @@
+import { getFiles } from './api.js';
+
 export const displayError = (message) => {
     alert(message);
     return true;
@@ -83,4 +85,12 @@ export const executeWithAnimation = async (func, ...args) => {
 export const preventDefaults = (e) => {
     e.preventDefault();
     e.stopPropagation();
+}
+
+export const getFileContent = async (file) => {
+    const contents = await getFiles(file);
+    const fileContentString = fromBase64(contents.data.content);
+    return {
+        content: JSON.parse(fileContentString)
+    };
 }

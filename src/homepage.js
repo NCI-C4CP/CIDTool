@@ -1,6 +1,6 @@
 import { appState, executeWithAnimation, fromBase64 } from './common.js';
 import { getFiles, getRepoContents, getUserRepositories } from './api.js';
-import { renderAddModal, renderModifyModal, renderDeleteModal, renderAddFolderModal } from './modals.js';
+import { renderAddModal, renderModifyModal, renderDeleteModal, renderAddFolderModal, renderViewModal } from './modals.js';
 import { generateSpreadsheet } from './files.js';
 import { structureFiles } from './dictionary.js';
 
@@ -48,6 +48,7 @@ export const renderHomePage = async () => {
         const openButton = document.createElement('button');
         openButton.classList.add('btn', 'btn-outline-primary', 'btn-sm', 'openRepoBtn');
         openButton.setAttribute('data-repo-name', repo.name);
+        openButton.setAttribute('data-permissions', repo.permissions);
         openButton.innerHTML = `<i class="bi bi-arrow-right"></i> Open Repository`;
 
         // Add click event listener to the "Open" button
@@ -211,12 +212,14 @@ const renderSearchBar = () => {
 
 const renderFileList = (searchTerm = '') => {
     const fileListDiv = document.getElementById('fileList');
-    const { files, index, currentPage, itemsPerPage } = appState.getState();
+    const { repo, files, index, currentPage, itemsPerPage } = appState.getState();
 
     // If no files, display message
     if (!files || files.length === 0) {
        return;
     }
+
+    const hasWritePermission = repo.permissions.push;
 
     const getFileNameWithoutExtension = (fileName) => {
         const lastDotIndex = fileName.lastIndexOf('.');
@@ -300,12 +303,18 @@ const renderFileList = (searchTerm = '') => {
                             <small class="text-muted text-truncate">${keyValue}</small>
                         </div>
                         <div class="d-flex flex-shrink-0">
-                            <button class="btn btn-outline-primary btn-sm modifyFileBtn me-2" data-bs-file="${file.name}">
-                                <i class="bi bi-pencil"></i> Modify
+                            <button class="btn btn-outline-primary btn-sm viewFileBtn me-2" data-bs-file="${file.name}">
+                                <i class="bi bi-eye"></i> View
                             </button>
-                            <button class="btn btn-outline-danger btn-sm deleteFileBtn" data-bs-file="${file.name}" data-bs-sha="${file.sha}">
-                                <i class="bi bi-trash"></i> Delete
-                            </button>
+                            ${hasWritePermission ? 
+                                `<button class="btn btn-outline-primary btn-sm modifyFileBtn me-2" data-bs-file="${file.name}">
+                                    <i class="bi bi-pencil"></i> Modify
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm deleteFileBtn" data-bs-file="${file.name}" data-bs-sha="${file.sha}">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>`
+                                : ``
+                            }
                         </div>
                     </div>
                 `;
@@ -340,6 +349,14 @@ const renderFileList = (searchTerm = '') => {
     deleteButtons.forEach(button => {
         button.addEventListener('click', event => {
             renderDeleteModal(event);
+        });
+    });
+
+    // for each view button, add listener to render view modal
+    const viewButtons = document.querySelectorAll('.viewFileBtn');
+    viewButtons.forEach(button => {
+        button.addEventListener('click', event => {
+            renderViewModal(event);
         });
     });
 };

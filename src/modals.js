@@ -1,4 +1,4 @@
-import { showAnimation, hideAnimation, fromBase64 } from './common.js';
+import { showAnimation, hideAnimation, fromBase64, getFileContent } from './common.js';
 import { addFile, updateFile, deleteFile, getFiles, addFolder } from './api.js';
 import { refreshHomePage, renderHomePage } from './homepage.js';
 
@@ -185,7 +185,7 @@ export const renderModifyModal = async (event) => {
 
     try {
         // Fetch the file contents
-        const contents = await getFiles(file);
+        const contents = await getFiles(file); //UPDATE
         const fileContentString = fromBase64(contents.data.content);
         const fileContent = JSON.parse(fileContentString);
 
@@ -350,7 +350,72 @@ export const renderModifyModal = async (event) => {
     }
 
     hideAnimation();
-};
+}
+
+export const renderViewModal = async (event) => {
+    showAnimation();
+    
+    const button = event.target;
+    const file = button.getAttribute('data-bs-file');
+    const modal = document.getElementById('modal');
+    const modalBody = modal.querySelector('.modal-body');
+    
+    try {
+        const { content } = await getFileContent(file);
+
+        modal.querySelector('.modal-header').innerHTML = `
+            <h5 class="modal-title">View Concept</h5>
+        `;
+
+        modalBody.innerHTML = '';
+
+        // Create container for key-value pairs
+        const keyValueContainer = document.createElement('div');
+        keyValueContainer.id = 'keyValuePairsView';
+
+        // Add each key-value pair to the container
+        Object.entries(content).forEach(([key, value]) => {
+            const row = document.createElement('div');
+            row.classList.add('row', 'mb-3', 'align-items-center');
+            
+            row.innerHTML = `
+                <div class="col-4">
+                    <strong>${key}</strong>
+                </div>
+                <div class="col-8">
+                    <div class="form-control-plaintext">${value}</div>
+                </div>
+            `;
+            
+            keyValueContainer.appendChild(row);
+        });
+
+        // Add the container to the modal body
+        modalBody.appendChild(keyValueContainer);
+
+        modal.querySelector('.modal-footer').innerHTML = `
+            <div class="w-100 d-flex justify-content-between">
+                <div>
+                    <button type="button" id="closeButton" class="btn btn-outline-secondary">Close</button>
+                </div>
+            </div>
+        `;
+
+        // Add event listener for the Close button
+        const closeButton = modal.querySelector('#closeButton');
+        closeButton.addEventListener('click', () => {
+            closeButton.blur();
+            bootstrap.Modal.getInstance(modal).hide();
+        });
+
+        new bootstrap.Modal(modal).show();
+
+    } catch (error) {
+        console.error('Error fetching file:', error);
+    } finally {
+        hideAnimation();
+    }
+}
 
 export const renderUploadModal = async (files) => {
 
