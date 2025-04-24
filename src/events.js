@@ -73,6 +73,18 @@ export const addEventDropClicked = () => {
 
     // Add click event listener to the import button
     importButton.addEventListener('click', () => {
+        const dropZone = document.getElementById('drop-zone-content');
+        const remoteSaveButton = document.getElementById('remote-save-button');
+        const saveButton = document.getElementById('save-button');
+    
+        dropZone.innerHTML = "Drag & Drop File or Folder Here";
+
+        remoteSaveButton.disabled = true;
+        remoteSaveButton.hidden = true;
+
+        saveButton.disabled = true;
+        saveButton.hidden = true;
+
         importModal.show();
     });
 }

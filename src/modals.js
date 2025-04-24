@@ -1,4 +1,4 @@
-import { showAnimation, hideAnimation, fromBase64, getFileContent } from './common.js';
+import { showAnimation, hideAnimation, fromBase64, getFileContent, executeWithAnimation } from './common.js';
 import { addFile, updateFile, deleteFile, getFiles, addFolder } from './api.js';
 import { refreshHomePage, renderHomePage } from './homepage.js';
 
@@ -482,10 +482,9 @@ export const renderUploadModal = async (files) => {
     // add event listener for save button
     const closeButton = modal.querySelector('.btn-outline-secondary');
     closeButton.addEventListener('click', async () => {
-        showAnimation();
         bootstrap.Modal.getInstance(modal).hide();
-        await renderHomePage();
-        hideAnimation();
+
+        await refreshHomePage();
     });
 }
 

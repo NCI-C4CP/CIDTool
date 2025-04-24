@@ -94,3 +94,9 @@ export const getFileContent = async (file) => {
         content: JSON.parse(fileContentString)
     };
 }
+
+export const removeEventListeners = (element) => {
+    const clone = element.cloneNode(true);
+    element.parentNode.replaceChild(clone, element);
+    return clone;
+  }

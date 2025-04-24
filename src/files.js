@@ -1,6 +1,6 @@
 import { parseColumns, structureDictionary, structureFiles } from "./dictionary.js";
 import { assignConcepts } from "./concepts.js";
-import { appState } from "./common.js";
+import { appState, removeEventListeners } from "./common.js";
 import { renderUploadModal } from "./modals.js";
 
 export const readSpreadsheet = async (file) => {
@@ -106,15 +106,19 @@ const handleFile = async (handle) => {
     const conceptObjects = structureDictionary(mapping, columns, data);
     appState.setState({ conceptObjects });
 
+    const importModal = bootstrap.Modal.getInstance(document.getElementById('importModal'));
     const zoneContent = document.getElementById('drop-zone-content');
 
     // set to name of file
     zoneContent.innerHTML = file.name;
 
     // Enable the Save button
-    const saveButton = document.getElementById('save-button');
+    let saveButton = document.getElementById('save-button');
+    saveButton = removeEventListeners(saveButton);
+
+    saveButton.innerHTML = `Generate Dictionary`;
     saveButton.disabled = false;
-    saveButton.removeAttribute('hidden');
+    saveButton.hidden = false;
 
     saveButton.addEventListener('click', async () => {
         const folderHandler = await window.showDirectoryPicker();
@@ -122,7 +126,7 @@ const handleFile = async (handle) => {
     
         const { conceptObjects } = appState.getState();
     
-        conceptObjects.forEach(async conceptObject => {
+        const savePromises = conceptObjects.map(async conceptObject => {
             const blob = new Blob([JSON.stringify(conceptObject)], { type: "application/json" });
             const name = `${conceptObject.conceptID}.json`;
             const fileHandle = await folderHandler.getFileHandle(name, { create: true });
@@ -133,6 +137,10 @@ const handleFile = async (handle) => {
         
             console.log(`JSON file "${name}" saved successfully`);
         });
+
+        await Promise.all(savePromises);
+
+        if (importModal) importModal.hide();
     });
 
     const { isLoggedIn } = appState.getState();
@@ -141,7 +149,7 @@ const handleFile = async (handle) => {
         // Enable the Remote Save Button
         const remoteSaveButton = document.getElementById('remote-save-button');
         remoteSaveButton.disabled = false;
-        remoteSaveButton.removeAttribute('hidden');
+        remoteSaveButton.hidden = false;
 
         remoteSaveButton.addEventListener('click', async () => {
             const { conceptObjects } = appState.getState();
@@ -154,6 +162,8 @@ const handleFile = async (handle) => {
             // Sort files by name
             files.sort((a, b) => a.name.localeCompare(b.name));
 
+            if (importModal) importModal.hide();
+
             renderUploadModal(files);
         });
     }
@@ -163,11 +173,8 @@ const handleFile = async (handle) => {
 const handleDirectory = async (directoryHandle) => {
 
     const files = [];
-
+    const importModal = bootstrap.Modal.getInstance(document.getElementById('importModal'));
     const zoneContent = document.getElementById('drop-zone-content');
-
-    // set to name of folder
-    zoneContent.innerHTML = directoryHandle.name;
 
     for await (const [name, handle] of directoryHandle.entries()) {
         if (handle.kind === 'file') {
@@ -180,13 +187,19 @@ const handleDirectory = async (directoryHandle) => {
 
     let structuredData = structureFiles(data);
 
+    zoneContent.innerHTML = directoryHandle.name;
+
     // Enable the Save button
-    const saveButton = document.getElementById('save-button');
+    let saveButton = document.getElementById('save-button');
+    saveButton = removeEventListeners(saveButton);
+
     saveButton.innerHTML = `Generate Spreadsheet`;
     saveButton.disabled = false;
-    saveButton.removeAttribute('hidden');
+    saveButton.hidden = false;
 
     saveButton.addEventListener('click', async () => {
         generateSpreadsheet(structuredData);
+
+        if (importModal) importModal.hide();
     });
 }
