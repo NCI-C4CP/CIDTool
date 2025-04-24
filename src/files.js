@@ -91,7 +91,26 @@ export const objectDropped = async (e) => {
 
 const handleFile = async (handle) => {
 
+    const importModal = bootstrap.Modal.getInstance(document.getElementById('importModal'));
+    const zoneContent = document.getElementById('drop-zone-content');
+
     const file = await handle.getFile();
+
+    const validFileTypes = [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ];
+
+    if (!validFileTypes.includes(file.type)) {
+        zoneContent.innerHTML = `
+            <div class="text-danger">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                Only Excel files (.xlsx) are accepted
+            </div>
+        `;
+
+        return;
+    }
+    
     const data = await readSpreadsheet(file);
     const columns = parseColumns(data[0]);
 
@@ -105,9 +124,6 @@ const handleFile = async (handle) => {
 
     const conceptObjects = structureDictionary(mapping, columns, data);
     appState.setState({ conceptObjects });
-
-    const importModal = bootstrap.Modal.getInstance(document.getElementById('importModal'));
-    const zoneContent = document.getElementById('drop-zone-content');
 
     // set to name of file
     zoneContent.innerHTML = file.name;
