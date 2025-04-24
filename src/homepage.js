@@ -123,8 +123,11 @@ const renderSearchBar = () => {
                 <div class="col-4">
                     <div class="d-flex align-items-center">
                         <input type="text" id="searchFiles" class="form-control form-control me-2 flex-grow-1" placeholder="Search files...">
-                        <button id="refreshButton" class="btn btn-outline-secondary btn flex-shrink-0">
+                        <button id="refreshButton" class="btn btn-outline-secondary btn me-2 flex-shrink-0">
                             <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                        <button id="backButton" class="btn btn-outline-secondary flex-shrink-0">
+                            <i class="bi bi-arrow-left"></i>
                         </button>
                     </div>
                 </div>
@@ -172,6 +175,11 @@ const renderSearchBar = () => {
     const refreshButton = document.getElementById('refreshButton');
     refreshButton.addEventListener('click', async () => {
         refreshHomePage();
+    });
+
+    const backButton = document.getElementById('backButton');
+    backButton.addEventListener('click', async () => {
+        directoryBack();
     });
 
     const downloadRepoButton = document.getElementById('downloadRepo');
@@ -329,8 +337,9 @@ const renderFileList = (searchTerm = '') => {
         button.addEventListener('click', async (event) => {
             const path = event.currentTarget.getAttribute('data-path');
             const { repo, directory } = appState.getState();
+            const fullPath = directory ? `${directory}/${path}` : path;
 
-            await renderRepoContent(repo, directory ? `${directory}/${path}` : path);
+            await executeWithAnimation(renderRepoContent, repo, fullPath);
         });
     });
 
@@ -421,4 +430,10 @@ export const refreshHomePage = async () => {
     if (repo) {
         await executeWithAnimation(renderRepoContent, repo, directory || '');
     }
+}
+
+const directoryBack = async () => {
+    const { repo, directory } = appState.getState();
+    const newDirectory = directory.split('/').slice(0, -1).join('/');
+    await executeWithAnimation(renderRepoContent, repo, newDirectory);
 }
