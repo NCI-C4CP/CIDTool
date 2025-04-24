@@ -178,31 +178,29 @@ const renderSearchBar = () => {
     downloadRepoButton.addEventListener('click', async () => {
         const contents = await getRepoContents();
         const zip = await JSZip.loadAsync(contents);
-        console.log(zip);
-
         const jsonDataArray = [];
+        const zipFiles = Object.keys(zip.files);
+        const basePath = zipFiles[0];
+        const { files, directory } = appState.getState();
+        const directoryFiles = files.filter(file => file.name.endsWith('.json'));
 
-        // Get an array of file names in the ZIP
-        const files = Object.keys(zip.files);
+        for (const file of directoryFiles) {
 
-        // Iterate over the files using a for...of loop
-        for (const fileName of files) {
-            const zipEntry = zip.files[fileName];
+            const fullPath = directory 
+            ? `${basePath}${directory}/${file.name}` 
+            : `${basePath}${file.name}`;
 
-            // Check if the file is a JSON file
-            if (fileName.endsWith('.json')) {
+            if (zip.files[fullPath]) {
                 try {
-                    // Read the file content
-                    const fileContent = await zipEntry.async('string');
+                    const fileContent = await zip.files[fullPath].async('string');
                     const jsonData = JSON.parse(fileContent);
+
                     jsonDataArray.push(jsonData);
                 } catch (error) {
                     console.error(`Error processing file ${fileName}:`, error);
                 }
             }
         }
-
-        console.log(jsonDataArray);
 
         let structuredData = structureFiles(jsonDataArray);
         generateSpreadsheet(structuredData);
