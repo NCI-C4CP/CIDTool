@@ -99,4 +99,166 @@ export const removeEventListeners = (element) => {
     const clone = element.cloneNode(true);
     element.parentNode.replaceChild(clone, element);
     return clone;
-  }
+}
+
+export const createReferenceDropdown = (field) => {
+    const { objects } = appState.getState();
+    const referencedConcepts = [];
+    const targetType = field.referencesType;
+    
+    // Find all matching concept types from the objects
+    for (const [fileName, conceptType] of Object.entries(objects)) {
+        if (conceptType === targetType) {
+            const displayValue = formatConceptDisplay(fileName);
+
+            referencedConcepts.push({
+                id: `${displayValue}`
+            });
+        }
+    }
+    
+    // Sort concepts for better UX
+    referencedConcepts.sort((a, b) => a.id.localeCompare(b.id));
+    
+    if (referencedConcepts.length === 0) {
+        return `
+            <select class="form-select" id="${field.id}" ${field.required ? 'required' : ''} disabled>
+                <option value="">No ${targetType} concepts available</option>
+            </select>
+            <div class="form-text text-warning">You need to create a ${targetType} concept first</div>
+        `;
+    }
+    else if (targetType === 'RESPONSE') {
+        return `
+            <div class="dropdown-container">
+                <div class="form-control d-flex flex-wrap align-items-center" 
+                    id="${field.id}_container" role="button" data-bs-toggle="dropdown" 
+                    aria-expanded="false">
+                    <span class="dropdown-text">Select Responses</span>
+                </div>
+                
+                <div class="dropdown-menu p-2 w-100" aria-labelledby="${field.id}_container">
+                    <div class="response-options" style="max-height: 200px; overflow-y: auto;">
+                        ${referencedConcepts.map(option => `
+                            <div class="form-check">
+                                <input class="form-check-input response-checkbox" type="checkbox" 
+                                    value="${option.id}" id="${field.id}_${option.id}">
+                                <label class="form-check-label w-100" for="${field.id}_${option.id}">
+                                    ${option.id}
+                                </label>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                <div id="${field.id}_pills" class="selected-pills d-flex flex-wrap mt-2"></div>
+                <input type="hidden" id="${field.id}" value="[]">
+            </div>
+            <style>
+                .selected-pills { 
+                    gap: 5px; 
+                    min-height: 30px;
+                }
+                .response-pill {
+                    background: #e9ecef;
+                    padding: 2px 8px;
+                    border-radius: 12px;
+                    font-size: 0.85em;
+                    display: inline-flex;
+                    align-items: center;
+                    margin-bottom: 4px;
+                }
+                .pill-remove {
+                    margin-left: 5px;
+                    cursor: pointer;
+                    font-size: 1.2em;
+                    line-height: 0.7;
+                }
+            </style>
+        `;
+    }
+    
+    return `
+        <select class="form-select" id="${field.id}" ${field.required ? 'required' : ''}>
+            <option value="">-- Select a ${targetType} concept --</option>
+            ${referencedConcepts.map(concept => 
+                `<option value="${concept.id}">${concept.id}</option>`
+            ).join('')}
+        </select>
+    `;
+};
+
+export const validateFormFields = (payload, template) => {
+
+    let valid = true;
+
+    template.forEach(field => {
+        if (field.id === 'conceptId' || field.id === 'key') {
+            return;
+        }
+
+        const fieldElement = document.getElementById(field.id);
+
+        if (!fieldElement) {
+            valid = false;
+            return;
+        }
+
+        if (field.required && (!fieldElement.value || fieldElement.value === '')) {
+            fieldElement.classList.add('is-invalid');
+            valid = false;
+            return;
+        }
+
+        switch (field.type) {
+            case 'array':
+                
+                break;
+                
+            case 'reference':
+                // Store reference ID directly
+                if (fieldElement.value) {
+                    payload['parent'] = extractConcept(fieldElement.value);
+                }
+                break;
+                
+            default:
+                // For regular fields, store value as is
+                payload[field.id] = fieldElement.value;
+        }
+    });
+
+    return valid;
+}
+
+/**
+ * Extracts the concept ID from a display string formatted as "[KEY] - [CONCEPT]"
+ * @param {string} displayValue - The formatted display string
+ * @returns {string} The extracted concept ID
+ */
+export const extractConcept = (displayValue) => {
+    if (!displayValue) return '';
+    
+    // If the string contains a dash, extract everything after the last dash
+    if (displayValue.includes(' - ')) {
+        // Split by the last dash and trim whitespace
+        const parts = displayValue.split(' - ');
+        return parts[parts.length - 1].trim();
+    }
+    
+    // If no dash found, return the whole string (likely just a concept ID)
+    return displayValue.trim();
+};
+
+/**
+ * Creates a display value from a concept filename using the index
+ * @param {string} fileName - The concept filename (e.g., "CONCEPT123.json")
+ * @param {Object} index - The index object mapping filenames to keys
+ * @returns {string} A formatted display string "[KEY] - [CONCEPT]"
+ */
+export const formatConceptDisplay = (fileName) => {
+    const { index } = appState.getState();
+    const conceptId = fileName.replace('.json', '');
+    const key = index[fileName];
+    
+    return `${key} - ${conceptId}`;
+};

@@ -1,47 +1,46 @@
-import { showAnimation, hideAnimation, fromBase64, getFileContent, executeWithAnimation } from './common.js';
-import { addFile, updateFile, deleteFile, getFiles, addFolder } from './api.js';
+import { showAnimation, hideAnimation, fromBase64, getFileContent, appState, createReferenceDropdown, validateFormFields } from './common.js';
+import { addFile, updateFile, deleteFile, getFiles, addFolder, getConcept } from './api.js';
 import { refreshHomePage, renderHomePage } from './homepage.js';
+import { conceptTemplates } from '../config.js';
 
-export const renderAddModal = () => {
+export const renderAddModal = async () => {
 
+    console.log(appState.getState());
     const modal = document.getElementById('modal');
     const modalHeader = modal.querySelector('.modal-header');
     const modalBody = modal.querySelector('.modal-body');
     const modalFooter = modal.querySelector('.modal-footer');
 
+    const concept = await getConcept();
+    console.log(concept);
+
     modalHeader.innerHTML = `
         <h5 class="modal-title">Add Concept</h5>
     `;
 
-    // Initialize the modal body with Concept ID and Description fields
+    // Add the concept type selector
     modalBody.innerHTML = `
         <div class="row mb-3">
             <div class="col-4">
-                <label for="conceptId" class="col-form-label">Concept ID*</label>
+                <label for="conceptType" class="col-form-label">Concept Type</label>
             </div>
             <div class="col-8">
-                <input type="text" class="form-control" id="conceptId" required>
+                <select class="form-select" id="conceptType">
+                    <option value="PRIMARY" selected>PRIMARY</option>
+                    <option value="SECONDARY">SECONDARY</option>
+                    <option value="SOURCE">SOURCE</option>
+                    <option value="QUESTION">QUESTION</option>
+                    <option value="RESPONSE">RESPONSE</option>
+                </select>
             </div>
         </div>
-        <div class="row mb-3">
-            <div class="col-4">
-                <label for="key" class="col-form-label">Key*</label>
-            </div>
-            <div class="col-8">
-                <textarea class="form-control" id="key" required></textarea>
-            </div>
-        </div>
-
-        <!-- Placeholder for additional fields -->
+        <div id="templateFields"></div>
         <div id="additionalFields"></div>
     `;
 
     // Update the modal footer with the Add Field button on the left and Cancel/Save on the right
     modalFooter.innerHTML = `
         <div class="w-100 d-flex justify-content-between">
-            <button type="button" class="btn btn-outline-primary" id="addFieldButton">
-                <i class="bi bi-plus"></i> Add Field
-            </button>
             <div>
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-outline-success">Save</button>
@@ -49,40 +48,69 @@ export const renderAddModal = () => {
         </div>
     `;
 
+    // Function to render template fields based on selected type
+    const renderTemplateFields = (type) => {
+        const templateFields = document.getElementById('templateFields');
+        templateFields.innerHTML = '';
+        
+        conceptTemplates[type].forEach(field => {
+            const fieldRow = document.createElement('div');
+            fieldRow.classList.add('row', 'mb-3');
+
+            let fieldHTML;
+
+            switch (field.type) {
+                case 'concept':
+                    fieldHTML = `
+                        <input type="text" class="form-control" id="${field.id}" value="${concept}" readonly>
+                    `;
+                    break;
+                case 'reference':
+                    fieldHTML = createReferenceDropdown(field);
+                    break;
+                default:
+                    fieldHTML = `<input type="${field.type}" class="form-control" id="${field.id}">`;
+            }
+
+            fieldRow.innerHTML = `
+                <div class="col-4">
+                    <label for="${field.id}" class="col-form-label">${field.label}</label>
+                </div>
+                <div class="col-8">
+                    ${fieldHTML}
+                </div>
+            `;
+            
+            templateFields.appendChild(fieldRow);
+        });
+    };
+
     new bootstrap.Modal(modal).show();
 
-    // Container for additional fields
-    const additionalFieldsContainer = modalBody.querySelector('#additionalFields');
+    // Render the default template (PRIMARY)
+    renderTemplateFields('PRIMARY');
+    
+    // Add event listener for type change
+    document.getElementById('conceptType').addEventListener('change', (e) => {
+        renderTemplateFields(e.target.value);
 
-    // Add event listener to the Add Field button
-    document.getElementById('addFieldButton').addEventListener('click', () => {
-        // Generate a unique identifier for the new field
-        const fieldIndex = additionalFieldsContainer.childElementCount;
-        const fieldId = `additionalField_${fieldIndex}`;
-
-        // Create a new field row
-        const fieldRow = document.createElement('div');
-        fieldRow.classList.add('row', 'mb-3');
-        fieldRow.innerHTML = `
-            <div class="col-4">
-                <input type="text" class="form-control" placeholder="Key" id="${fieldId}_key" required>
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" placeholder="Value" id="${fieldId}_value" required>
-            </div>
-        `;
-        additionalFieldsContainer.appendChild(fieldRow);
+        if (e.target.value === 'QUESTION') {
+            setTimeout(setupResponseMultiSelect, 100);
+        }
     });
 
     // Add event listener for the Save button
     const confirmButton = modal.querySelector('.btn-outline-success');
     confirmButton.addEventListener('click', async () => {
         // Collect all the fields into a payload object
-        const payload = {};
+        const payload = {
+            'object_type': document.getElementById('conceptType').value,
+        };
 
         // Get Concept ID and Key
         const conceptId = document.getElementById('conceptId').value.trim();
         const key = document.getElementById('key').value.trim();
+        const keyInput = document.getElementById('key');
 
         // Validate required fields
         if (!conceptId || !key) {
@@ -90,23 +118,38 @@ export const renderAddModal = () => {
             return;
         }
 
-        payload.conceptId = conceptId;
-        payload.key = key;
+        const { index } = appState.getState();
+        const existingKeys = Object.values(index);
+        const keyExists = existingKeys.some(existingKey => 
+            existingKey.toLowerCase() === key.toLowerCase()
+        );
 
-        // Get additional fields
-        const additionalFields = additionalFieldsContainer.querySelectorAll('.row.mb-3');
-        additionalFields.forEach((fieldRow, index) => {
-            const keyInput = fieldRow.querySelector(`#additionalField_${index}_key`);
-            const valueInput = fieldRow.querySelector(`#additionalField_${index}_value`);
-
-            const key = keyInput.value.trim();
-            const value = valueInput.value.trim();
-
-            // Only include fields where the key is provided
-            if (key) {
-                payload[key] = value;
+        if (keyExists) {
+            keyInput.classList.add('is-invalid');
+            let errorMessage = document.getElementById('key-error');
+            if (!errorMessage) {
+                errorMessage = document.createElement('div');
+                errorMessage.id = 'key-error';
+                errorMessage.className = 'invalid-feedback';
+                keyInput.parentNode.appendChild(errorMessage);
             }
-        });
+            errorMessage.textContent = 'This key already exists. Please use a unique key.';
+        
+            keyInput.focus();
+            return;
+        }
+
+        keyInput.classList.remove('is-invalid');
+
+        payload['conceptId'] = conceptId;
+        payload['key'] = key;
+
+        const validForm = validateFormFields(payload, conceptTemplates[document.getElementById('conceptType').value]);
+
+        if (!validForm) {
+            alert('Please fill in all required fields.');
+            return;
+        }
 
         // Prepare the file path and content
         const path = `${conceptId}.json`;
@@ -128,6 +171,57 @@ export const renderAddModal = () => {
         } finally {
             // Hide loading animation
             hideAnimation();
+        }
+    });
+}
+
+const setupResponseMultiSelect = () => {
+    const container = document.getElementById('responses_container');
+    const pillsContainer = document.getElementById('responses_pills');
+    const hiddenInput = document.getElementById('responses');
+    const checkboxes = document.querySelectorAll('.response-checkbox');
+
+    const updatePills = () => {
+        // Clear existing pills
+        pillsContainer.innerHTML = '';
+        
+        // Get all checked checkboxes
+        const selectedOptions = [];
+        checkboxes.forEach(checkbox => {
+            if (checkbox.checked) {
+                const optionId = checkbox.value;
+                const optionLabel = checkbox.nextElementSibling.textContent.trim();
+                selectedOptions.push({ id: optionId, label: optionLabel });
+                
+                // Create a pill for this selection
+                const pill = document.createElement('span');
+                pill.className = 'response-pill';
+                pill.innerHTML = `
+                    ${optionLabel}
+                    <span class="pill-remove" data-id="${optionId}">&times;</span>
+                `;
+                pillsContainer.appendChild(pill);
+            }
+        });
+        
+        // Update hidden input with JSON array of IDs
+        hiddenInput.value = JSON.stringify(selectedOptions.map(opt => opt.id));
+    };
+    
+    // Add event listeners to checkboxes
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updatePills);
+    });
+
+    // Click handler for pill remove buttons
+    pillsContainer.addEventListener('click', (e) => {
+        if (e.target.classList.contains('pill-remove')) {
+            const optionId = e.target.getAttribute('data-id');
+            const checkbox = document.getElementById(`responses_${optionId}`);
+            if (checkbox) {
+                checkbox.checked = false;
+                updatePills();
+            }
         }
     });
 }

@@ -1,35 +1,31 @@
 export const CLIENT_ID = 'Ov23liu5RSq1PMWSLLqh';
-export const REDIRECT_URI = 'https://analyticsphere.github.io/CIDTool/';
+export const REDIRECT_URI = 'https://nci-c4cp.github.io/CIDTool/';
 export const CLIENT_ID_LOCAL = 'Ov23liVVaSBQIH0ahnn7';
 export const REDIRECT_URI_LOCAL = 'http://localhost:5000/';
 
-export const fields = {
-    "Primary Source": [
-        { label: "Concept ID", id: "concept", type: "text", required: true },
-        { label: "Source Name", id: "Primary Source", type: "text", required: true }
+export const conceptTemplates = {
+    PRIMARY: [
+        { id: "conceptId", label: "Concept ID", required: true, type: "concept" },
+        { id: "key", label: "Key", required: true, type: "text" }
     ],
-    "Secondary Source": [
-        { label: "Concept ID", id: "concept", type: "text", required: true },
-        { label: "Source Name", id: "Secondary Source", type: "text", required: true },
-        { label: "Primary Source", id: "Primary Source", type: "concept", required: true }
+    SECONDARY: [
+        { id: "conceptId", label: "Concept ID", required: true, type: "concept" },
+        { id: "key", label: "Key", required: true, type: "text" },
+        { id: "primaryConceptId", label: "Primary Concept ID", required: true, type: "reference", referencesType: "PRIMARY" }
     ],
-    "Source Question": [
-        { label: "Concept ID", id: "concept", type: "text", required: true },
-        { label: "Question Text", id: "Source Question Text", type: "text", required: true },
-        { label: "Secondary Source", id: "Secondary Source", type: "text", required: true }
+    SOURCE: [
+        { id: "conceptId", label: "Concept ID", required: true, type: "concept" },
+        { id: "key", label: "Key", required: true, type: "text" }
     ],
-    "Question": [
-        { label: "Concept ID", id: "concept", type: "text", required: true },
-        { label: "Question Name", id: "questionName", type: "text" },
-        { label: "Variable Label", id: "Variable Label", type: "text", required: true },
-        { label: "Variable Name", id: "Variable Name", type: "text", required: true },
-        { label: "Question Text", id: "Current Question Text", type: "text", required: true },
-        { label: "Variable Type", id: "Variable Type", type: "text", required: true },
-        { label: "Variable Length", id: "Variable Length", type: "text", required: true },
-        { label: "Responses", id: "Responses", type: "text", required: true }
+    QUESTION: [
+        { id: "conceptId", label: "Concept ID", required: true, type: "concept" },
+        { id: "key", label: "Key", required: true, type: "text" },
+        { id: "secondaryConceptId", label: "Secondary Concept ID", required: true, type: "reference", referencesType: "SECONDARY" },
+        { id: "sourceConceptId", label: "Source Concept ID", required: false, type: "reference", referencesType: "SOURCE" },
+        { id: "responses", label: "Responses", required: false, type: "reference", referencesType: "RESPONSE" }
     ],
-    "Response": [
-        { label: "Concept ID", id: "concept", type: "text", required: true },
-        { label: "Value", id: "Current Value", type: "text", required: true }
+    RESPONSE: [
+        { id: "conceptId", label: "Concept ID", required: true, type: "concept" },
+        { id: "key", label: "Key", required: true, type: "text" }
     ]
 };

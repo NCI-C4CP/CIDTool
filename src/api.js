@@ -1,10 +1,13 @@
 import { REDIRECT_URI, REDIRECT_URI_LOCAL } from '../config.js';
 import { toBase64, isLocal, appState } from './common.js';
 
+// const api = 'https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=';
+const api = 'http://localhost:8080/ghauth?api=';
+
 export const getUserDetails = async () => {
     
     try {
-        const response = await fetch(`https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getUser`, {
+        const response = await fetch(`${api}getUser`, {
             method: 'GET',
             headers: {
                 Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
@@ -34,7 +37,7 @@ export const getAccessToken = async (code) => {
     }
 
     try {
-        const response = await fetch(`https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=accessToken${local ? '&environment=dev' : ''}`, {
+        const response = await fetch(`${api}accessToken${local ? '&environment=dev' : ''}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -61,7 +64,7 @@ export const getRepoContents = async () => {
     const { owner, repoName } = state;
 
     try {
-        const response = await fetch(`https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getRepo&owner=${owner}&repo=${repoName}`, {
+        const response = await fetch(`${api}getRepo&owner=${owner}&repo=${repoName}`, {
             method: 'GET',
             headers: {
                 Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
@@ -91,7 +94,7 @@ export const addFile = async (fileName, content) => {
     path = path + fileName;
 
     try {
-        const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=addFile', {
+        const response = await fetch(`${api}addFile`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
@@ -128,7 +131,7 @@ export const addFolder = async (folderName) => {
     path = path + folderName + '/.gitkeep';
 
     try {
-        const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=addFile', {
+        const response = await fetch(`${api}addFile`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
@@ -165,7 +168,7 @@ export const updateFile = async (fileName, content, sha) => {
     path = path + fileName;
 
     try {
-        const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=updateFile', {
+        const response = await fetch(`${api}updateFile`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
@@ -204,7 +207,7 @@ export const deleteFile = async (fileName, sha) => {
     path = path + fileName;
 
     try {
-        const response = await fetch('https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=deleteFile', {
+        const response = await fetch(`${api}deleteFile`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
@@ -242,7 +245,7 @@ export const getFiles = async (fileName = '') => {
     }
 
     try {
-        const url = `https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getFiles&owner=${owner}&repo=${repoName}&path=${path}`;
+        const url = `${api}getFiles&owner=${owner}&repo=${repoName}&path=${path}`;
 
         const response = await fetch(url, {
             method: 'GET',
@@ -264,7 +267,7 @@ export const getFiles = async (fileName = '') => {
 export const getUserRepositories = async () => {
 
     try {
-        const response = await fetch(`https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=getUserRepositories`, {
+        const response = await fetch(`${api}getUserRepositories`, {
             method: 'GET',
             headers: {
                 Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
@@ -275,6 +278,67 @@ export const getUserRepositories = async () => {
         
         const data = await response.json();
         return data;
+    }
+    catch (error) {
+        console.error(error);
+    }
+}
+
+export const getConcept = async () => {
+
+    const state = appState.getState();
+    const { owner, repoName, directory } = state;
+
+    let path = '';
+    if (directory) {
+        path = directory;
+    }
+
+    path += 'index.json';
+
+    try {
+        const response = await fetch(`${api}getConcept&owner=${owner}&repo=${repoName}&path=${path}`, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
+        });
+    
+        const data = await response.json();
+        return data.conceptID;
+    }
+    catch (error) {
+        console.error(error);
+    }
+}
+
+export const getConfigurationSettings = async () => {
+
+    const state = appState.getState();
+    const { owner, repoName, directory } = state;
+
+    let path = '';
+    if (directory) {
+        path = directory + '/';
+    }
+
+    path += 'config.json';
+
+    try {
+        const response = await fetch(`${api}getConfig&owner=${owner}&repo=${repoName}&path=${path}`, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
+        });
+        console.log();
+        //const data = await response.json();
+        //appState.setState({ config: data });
+        //return data;
     }
     catch (error) {
         console.error(error);
