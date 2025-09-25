@@ -1,6 +1,6 @@
 import { appState, executeWithAnimation, fromBase64 } from './common.js';
 import { getFiles, getRepoContents, getUserRepositories, getConfigurationSettings } from './api.js';
-import { renderAddModal, renderModifyModal, renderDeleteModal, renderAddFolderModal, renderViewModal } from './modals.js';
+import { renderAddModal, renderDeleteModal, renderAddFolderModal, renderViewModal, renderConfigModal } from './modals.js';
 import { generateSpreadsheet } from './files.js';
 import { structureFiles } from './dictionary.js';
 
@@ -107,7 +107,8 @@ const renderRepoContent = async (repo, directory) => {
         let filesWithoutIndex = files
                                 .filter(file => file.name !== 'index.json')
                                 .filter(file => file.name !== '.gitkeep')
-                                .filter(file => file.name !== 'object.json');
+                                .filter(file => file.name !== 'object.json')
+                                .filter(file => file.name !== 'config.json');
 
         // If 'index.json' does NOT exist, display only directories
         if (!indexFile) {
@@ -117,7 +118,7 @@ const renderRepoContent = async (repo, directory) => {
         // Update appState with files and index
         appState.setState({ files: filesWithoutIndex, index: indexContent, objects: objectContent });
 
-        getConfigurationSettings();
+        await getConfigurationSettings();
         renderSearchBar();
         renderFileList();
     } catch (error) {
@@ -149,6 +150,9 @@ const renderSearchBar = () => {
                     </button>
                     <button id="addFile" class="btn btn-primary me-2">
                         <i class="bi bi-plus-lg"></i> Add Concept
+                    </button>
+                    <button id="configButton" class="btn btn-outline-secondary me-2">
+                        <i class="bi bi-gear"></i> Configure
                     </button>
                     <button id="downloadRepo" class="btn btn-primary">
                         <i class="bi bi-download"></i> Download
@@ -192,6 +196,11 @@ const renderSearchBar = () => {
     const backButton = document.getElementById('backButton');
     backButton.addEventListener('click', async () => {
         directoryBack();
+    });
+
+    const configButton = document.getElementById('configButton');
+    configButton.addEventListener('click', () => {
+        renderConfigModal();
     });
 
     const downloadRepoButton = document.getElementById('downloadRepo');
@@ -325,10 +334,7 @@ const renderFileList = (searchTerm = '') => {
                                 <i class="bi bi-eye"></i> View
                             </button>
                             ${hasWritePermission ? 
-                                `<button class="btn btn-outline-primary btn-sm modifyFileBtn me-2" data-bs-file="${file.name}">
-                                    <i class="bi bi-pencil"></i> Modify
-                                </button>
-                                <button class="btn btn-outline-danger btn-sm deleteFileBtn" data-bs-file="${file.name}" data-bs-sha="${file.sha}">
+                                `<button class="btn btn-outline-danger btn-sm deleteFileBtn" data-bs-file="${file.name}" data-bs-sha="${file.sha}">
                                     <i class="bi bi-trash"></i> Delete
                                 </button>`
                                 : ``
@@ -352,14 +358,6 @@ const renderFileList = (searchTerm = '') => {
             const fullPath = directory ? `${directory}/${path}` : path;
 
             await executeWithAnimation(renderRepoContent, repo, fullPath);
-        });
-    });
-
-    // for each modify button, add listener to render modify modal
-    const modifyButtons = document.querySelectorAll('.modifyFileBtn');
-    modifyButtons.forEach(button => {
-        button.addEventListener('click', event => {
-            renderModifyModal(event);
         });
     });
 

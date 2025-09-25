@@ -1,7 +1,6 @@
-import { showAnimation, hideAnimation, fromBase64, getFileContent, appState, createReferenceDropdown, validateFormFields } from './common.js';
-import { addFile, updateFile, deleteFile, getFiles, addFolder, getConcept } from './api.js';
-import { refreshHomePage, renderHomePage } from './homepage.js';
-import { conceptTemplates } from '../config.js';
+import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, validateFormFields } from './common.js';
+import { addFile, deleteFile, addFolder, getConcept, getFiles, updateFile } from './api.js';
+import { refreshHomePage } from './homepage.js';
 
 export const renderAddModal = async () => {
 
@@ -52,6 +51,8 @@ export const renderAddModal = async () => {
     const renderTemplateFields = (type) => {
         const templateFields = document.getElementById('templateFields');
         templateFields.innerHTML = '';
+
+        const conceptTemplates = appState.getState().config;
         
         conceptTemplates[type].forEach(field => {
             const fieldRow = document.createElement('div');
@@ -144,6 +145,7 @@ export const renderAddModal = async () => {
         payload['conceptId'] = conceptId;
         payload['key'] = key;
 
+        const conceptTemplates = appState.getState().config;
         const validForm = validateFormFields(payload, conceptTemplates[document.getElementById('conceptType').value]);
 
         if (!validForm) {
@@ -266,249 +268,396 @@ export const renderDeleteModal = (event) => {
     });
 }
 
-export const renderModifyModal = async (event) => {
-    showAnimation();
-
-    const button = event.target;
-    const file = button.getAttribute('data-bs-file');
-
-    const modal = document.getElementById('modal');
-    const modalHeader = modal.querySelector('.modal-header');
-    const modalBody = modal.querySelector('.modal-body');
-    const modalFooter = modal.querySelector('.modal-footer');
-
-    try {
-        // Fetch the file contents
-        const contents = await getFiles(file); //UPDATE
-        const fileContentString = fromBase64(contents.data.content);
-        const fileContent = JSON.parse(fileContentString);
-
-        // Set the modal title
-        modalHeader.innerHTML = `
-            <h5 class="modal-title">Modify Concept</h5>
-        `;
-
-        // Clear the modal body
-        modalBody.innerHTML = '';
-
-        // Container for key-value pairs
-        const keyValuePairsContainer = document.createElement('div');
-        keyValuePairsContainer.id = 'keyValuePairs';
-
-        // Function to add a key-value pair row
-        const addKeyValuePairRow = (key = '', value = '', isExisting = false) => {
-            const index = keyValuePairsContainer.childElementCount;
-            const fieldId = `keyValuePair_${index}`;
-
-            const fieldRow = document.createElement('div');
-            fieldRow.classList.add('row', 'mb-3', 'align-items-center');
-
-            if (isExisting) {
-                fieldRow.innerHTML = `
-                    <div class="col-4">
-                        <label class="col-form-label">${key}</label>
-                    </div>
-                    <div class="col-7">
-                        <input type="text" class="form-control" placeholder="Value" id="${fieldId}_value" value="${value}">
-                    </div>
-                    <div class="col-1 text-end">
-                        <!-- Empty space -->
-                    </div>
-                `;
-            } else {
-                fieldRow.innerHTML = `
-                    <div class="col-4">
-                        <input type="text" class="form-control" placeholder="Field" id="${fieldId}_key" required>
-                    </div>
-                    <div class="col-7">
-                        <input type="text" class="form-control" placeholder="Value" id="${fieldId}_value">
-                    </div>
-                    <div class="col-1 text-end">
-                        <button type="button" class="btn btn-sm btn-outline-danger" id="${fieldId}_remove">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
-                `;
-
-                // Add event listener to the remove button
-                const removeButton = fieldRow.querySelector(`#${fieldId}_remove`);
-                removeButton.addEventListener('click', () => {
-                    keyValuePairsContainer.removeChild(fieldRow);
-                });
-            }
-
-            keyValuePairsContainer.appendChild(fieldRow);
-        };
-
-        // Add existing key-value pairs to the modal
-        for (const [key, value] of Object.entries(fileContent)) {
-            addKeyValuePairRow(key, value, true); // 'true' indicates existing fields
-        }
-
-        // Append the key-value pairs container to the modal body
-        modalBody.appendChild(keyValuePairsContainer);
-
-        // Update the modal footer with the Add Field button and Save/Cancel buttons
-        modalFooter.innerHTML = `
-            <div class="w-100 d-flex justify-content-between">
-                <button type="button" class="btn btn-outline-primary" id="addFieldButton">
-                    <i class="bi bi-plus"></i> Add Field
-                </button>
-                <div>
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-outline-success">Save</button>
-                </div>
-            </div>
-        `;
-
-        // Show the modal
-        new bootstrap.Modal(modal).show();
-
-        // Add event listener to the Add Field button
-        document.getElementById('addFieldButton').addEventListener('click', () => {
-            addKeyValuePairRow(); // Adds an empty key-value pair row
-        });
-
-        // Add event listener for the Save button
-        const confirmButton = modal.querySelector('.btn-outline-success');
-        confirmButton.addEventListener('click', async () => {
-            // Collect all the key-value pairs into a payload object
-            const payload = {};
-
-            // Iterate over all key-value pair rows
-            const keyValuePairRows = keyValuePairsContainer.querySelectorAll('.row.mb-3');
-            let valid = true;
-            keyValuePairRows.forEach((fieldRow, index) => {
-                const isExisting = index < Object.keys(fileContent).length;
-                let key, value;
-
-                if (isExisting) {
-                    // Existing keys are displayed as labels
-                    key = Object.keys(fileContent)[index];
-                    const valueInput = fieldRow.querySelector(`#keyValuePair_${index}_value`);
-                    value = valueInput.value.trim();
-                } else {
-                    // New keys are entered in input fields
-                    const keyInput = fieldRow.querySelector(`#keyValuePair_${index}_key`);
-                    const valueInput = fieldRow.querySelector(`#keyValuePair_${index}_value`);
-                    key = keyInput.value.trim();
-                    value = valueInput.value.trim();
-
-                    // Validate that key is not empty
-                    if (!key) {
-                        valid = false;
-                        keyInput.classList.add('is-invalid');
-                    } else {
-                        keyInput.classList.remove('is-invalid');
-                    }
-                }
-
-                // Add to payload
-                payload[key] = value;
-            });
-
-            if (!valid) {
-                alert('Please fill in all required fields.');
-                return;
-            }
-
-            // Prepare the file content
-            const content = JSON.stringify(payload, null, 2); // Pretty-print JSON with indentation
-
-            // Show loading animation
-            showAnimation();
-
-            try {
-                // Update the file (assuming updateFile is defined elsewhere)
-                await updateFile(contents.data.path, content, contents.data.sha);
-
-                // Hide the modal
-                bootstrap.Modal.getInstance(modal).hide();
-
-                // Refresh the home page
-                renderHomePage();
-            } catch (error) {
-                console.error('Error updating file:', error);
-                alert('An error occurred while saving the changes.');
-            } finally {
-                // Hide loading animation
-                hideAnimation();
-            }
-        });
-    } catch (error) {
-        console.error('Error fetching file:', error);
-        alert('An error occurred while loading the file.');
-        // Hide loading animation and modal
-        hideAnimation();
-        bootstrap.Modal.getInstance(modal).hide();
-    }
-
-    hideAnimation();
-}
-
 export const renderViewModal = async (event) => {
     showAnimation();
     
     const button = event.target;
     const file = button.getAttribute('data-bs-file');
     const modal = document.getElementById('modal');
+    const modalHeader = modal.querySelector('.modal-header');
     const modalBody = modal.querySelector('.modal-body');
+    const modalFooter = modal.querySelector('.modal-footer');
     
     try {
         const { content } = await getFileContent(file);
+        
+        // Validate that we have content and it's a proper concept
+        if (!content || typeof content !== 'object') {
+            throw new Error('Invalid concept data');
+        }
+        
+        const { config, repo } = appState.getState();
+        const conceptType = content['object_type'] || 'PRIMARY'; // Default to PRIMARY if not specified
+        const typeConfig = config[conceptType] || [];
 
-        modal.querySelector('.modal-header').innerHTML = `
-            <h5 class="modal-title">View Concept</h5>
-        `;
+        const hasWritePermission = repo.permissions.push;
 
-        modalBody.innerHTML = '';
+        modal.originalData = content;
+        modal.isEditMode = false;
 
-        // Create container for key-value pairs
-        const keyValueContainer = document.createElement('div');
-        keyValueContainer.id = 'keyValuePairsView';
-
-        // Add each key-value pair to the container
-        Object.entries(content).forEach(([key, value]) => {
-            const row = document.createElement('div');
-            row.classList.add('row', 'mb-3', 'align-items-center');
-            
-            row.innerHTML = `
-                <div class="col-4">
-                    <strong>${key}</strong>
-                </div>
-                <div class="col-8">
-                    <div class="form-control-plaintext">${value}</div>
-                </div>
+        const renderModalContent = () => {
+            // Render header with badge showing concept type
+            modalHeader.innerHTML = `
+                <h5 class="modal-title d-flex align-items-center">
+                    ${modal.isEditMode ? 'Edit' : 'View'} Concept 
+                    <span class="badge bg-primary ms-2">${conceptType}</span>
+                </h5>
             `;
+
+            // Clear modal body
+            modalBody.innerHTML = '';
             
-            keyValueContainer.appendChild(row);
-        });
+            // Create container for concept content
+            const contentContainer = document.createElement('div');
+            contentContainer.classList.add('concept-container');
+            
+            if (modal.isEditMode) {
+                // EDIT MODE - Show all configured fields
+                renderEditMode(contentContainer, content, typeConfig);
+            } else {
+                // VIEW MODE - Only show fields with values
+                renderViewMode(contentContainer, content, typeConfig);
+            }
+            
+            // Add the container to the modal body
+            modalBody.appendChild(contentContainer);
+            
+            // Set up footer buttons based on mode
+            if (modal.isEditMode) {
+                modalFooter.innerHTML = `
+                    <div class="w-100 d-flex justify-content-between">
+                        <button type="button" id="cancelButton" class="btn btn-outline-secondary">Cancel</button>
+                        <button type="button" id="saveButton" class="btn btn-outline-success">Save Changes</button>
+                    </div>
+                `;
+                
+                // Add event listeners for edit mode
+                document.getElementById('cancelButton').addEventListener('click', () => {
+                    // Switch back to view mode without saving
+                    modal.isEditMode = false;
+                    renderModalContent();
+                });
+                
+                document.getElementById('saveButton').addEventListener('click', async () => {
+                    // Collect edited data and save
+                    await saveEditedConcept(content, typeConfig, file);
+                });
+            } else {
+                modalFooter.innerHTML = `
+                    <div class="w-100 d-flex justify-content-between">
+                        <button type="button" id="closeButton" class="btn btn-outline-secondary">Close</button>
+                        <button type="button" id="editButton" class="btn btn-outline-primary" disabled>Edit</button>
+                    </div>
+                `;
+                
+                // Add event listeners for view mode
+                document.getElementById('closeButton').addEventListener('click', () => {
+                    bootstrap.Modal.getInstance(modal).hide();
+                });
 
-        // Add the container to the modal body
-        modalBody.appendChild(keyValueContainer);
+                if (hasWritePermission) {
+                    document.getElementById('editButton').removeAttribute('disabled');
+                }
 
-        modal.querySelector('.modal-footer').innerHTML = `
-            <div class="w-100 d-flex justify-content-between">
-                <div>
-                    <button type="button" id="closeButton" class="btn btn-outline-secondary">Close</button>
-                </div>
-            </div>
-        `;
+                document.getElementById('editButton').addEventListener('click', () => {
+                    // Switch to edit mode
+                    modal.isEditMode = true;
+                    renderModalContent();
+                });
+            }
+        };
 
-        // Add event listener for the Close button
-        const closeButton = modal.querySelector('#closeButton');
-        closeButton.addEventListener('click', () => {
-            closeButton.blur();
-            bootstrap.Modal.getInstance(modal).hide();
-        });
+        renderModalContent();
 
         new bootstrap.Modal(modal).show();
 
     } catch (error) {
         console.error('Error fetching file:', error);
+        
+        // Show user-friendly error message
+        modalBody.innerHTML = `
+            <div class="alert alert-danger">
+                <h6><i class="bi bi-exclamation-triangle"></i> Error Loading Concept</h6>
+                <p>${error.message}</p>
+                <small class="text-muted">File: ${file}</small>
+            </div>
+        `;
+        
+        modalFooter.innerHTML = `
+            <button type="button" class="btn btn-outline-secondary" onclick="bootstrap.Modal.getInstance(this.closest('.modal')).hide()">Close</button>
+        `;
+        
+        new bootstrap.Modal(modal).show();
     } finally {
         hideAnimation();
     }
+}
+
+// Function to render view mode (only fields with values)
+function renderViewMode(container, content, typeConfig) {
+    // Add styling for view mode
+    container.innerHTML = `
+        <style>
+            .field-group {
+                padding: 12px 15px;
+                border-bottom: 1px solid #eee;
+            }
+            .field-group:last-child {
+                border-bottom: none;
+            }
+            .field-label {
+                color: #495057;
+                font-weight: 500;
+                margin-bottom: 4px;
+            }
+            .field-value {
+                padding: 6px 0;
+            }
+            .badge-reference {
+                background-color: #6c757d;
+            }
+            .badge-array {
+                background-color: #f8f9fa;
+                color: #212529;
+                border: 1px solid #dee2e6;
+            }
+            .metadata-section {
+                background-color: #f8f9fa;
+                border-radius: 5px;
+                padding: 12px;
+                margin-top: 15px;
+            }
+            .section-header {
+                margin-bottom: 10px;
+                padding-bottom: 6px;
+                border-bottom: 1px solid #e9ecef;
+                color: #6c757d;
+                font-weight: 500;
+            }
+        </style>
+    `;
+
+    // Create sections based on field types
+    const coreFields = document.createElement('div');
+    coreFields.className = 'core-fields';
+    
+    const referenceFields = document.createElement('div');
+    referenceFields.className = 'reference-fields';
+    
+    const otherFields = document.createElement('div');
+    otherFields.className = 'other-fields';
+
+    // Track which fields have been displayed
+    const displayedFields = new Set();
+    
+    // First, display fields according to the configuration
+    if (typeConfig.length > 0) {
+        typeConfig.forEach(field => {
+            // Only show fields that have values
+            if (content[field.id] !== undefined && content[field.id] !== null && content[field.id] !== '') {
+                const fieldValue = content[field.id];
+                const fieldGroup = document.createElement('div');
+                fieldGroup.className = 'field-group';
+                
+                let fieldHTML = '';
+                
+                // Format different field types
+                switch (field.type) {
+                    case 'concept':
+                        fieldHTML = `<div class="field-value concept-id">${fieldValue}</div>`;
+                        coreFields.appendChild(fieldGroup);
+                        break;
+                    case 'reference':
+                        fieldHTML = `<div class="field-value"><span class="badge badge-reference">${fieldValue}</span></div>`;
+                        referenceFields.appendChild(fieldGroup);
+                        break;
+                    case 'array':
+                        if (Array.isArray(fieldValue) && fieldValue.length > 0) {
+                            fieldHTML = `<div class="field-value">${fieldValue.map(item => 
+                                `<span class="badge badge-array me-1 mb-1">${item}</span>`
+                            ).join('')}</div>`;
+                        } else if (typeof fieldValue === 'string') {
+                            fieldHTML = `<div class="field-value">${fieldValue}</div>`;
+                        }
+                        otherFields.appendChild(fieldGroup);
+                        break;
+                    default:
+                        fieldHTML = `<div class="field-value">${fieldValue}</div>`;
+                        
+                        // Add core fields to their section, others to the other section
+                        if (field.id === 'key' || field.id === 'conceptId') {
+                            coreFields.appendChild(fieldGroup);
+                        } else {
+                            otherFields.appendChild(fieldGroup);
+                        }
+                }
+                
+                // Add label and value to the field group
+                fieldGroup.innerHTML = `
+                    <div class="field-label">${field.label}</div>
+                    ${fieldHTML}
+                `;
+                
+                displayedFields.add(field.id);
+            }
+        });
+    }
+    
+    // Add sections to container if they have content
+    if (coreFields.children.length > 0) {
+        const coreHeader = document.createElement('div');
+        coreHeader.className = 'section-header mt-4';
+        coreHeader.innerHTML = '<h6>Core Fields</h6>';
+        container.appendChild(coreHeader);
+        container.appendChild(coreFields);
+    }
+    
+    if (referenceFields.children.length > 0) {
+        // Add a section header
+        const referenceHeader = document.createElement('div');
+        referenceHeader.className = 'section-header mt-4';
+        referenceHeader.innerHTML = '<h6>References</h6>';
+        container.appendChild(referenceHeader);
+        container.appendChild(referenceFields);
+    }
+
+    if (otherFields.children.length > 0 && otherFields.querySelector(':not(.metadata-section)')) {
+        // Add a section header for other fields (not including metadata)
+        const otherHeader = document.createElement('div');
+        otherHeader.className = 'section-header mt-4';
+        otherHeader.innerHTML = '<h6>Other Fields</h6>';
+        container.appendChild(otherHeader);
+        container.appendChild(otherFields);
+    }
+}
+
+// Function to render edit mode (all configured fields)
+function renderEditMode(container, content, typeConfig) {
+    container.innerHTML = `
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-info-circle"></i> 
+            Editing concept. All configured fields are shown below.
+        </div>
+        <form id="editConceptForm">
+            <div class="edit-fields"></div>
+        </form>
+    `;
+    
+    const editFields = container.querySelector('.edit-fields');
+    
+    // Render all configured fields, regardless of whether they have values
+    typeConfig.forEach(field => {
+        const fieldValue = content[field.id] !== undefined ? content[field.id] : '';
+        const fieldRow = document.createElement('div');
+        fieldRow.className = 'mb-3';
+        
+        let fieldInput;
+        
+        // Create appropriate input based on field type
+        switch (field.type) {
+            case 'concept':
+                // Concept ID is read-only
+                fieldInput = `
+                    <input type="text" class="form-control" id="edit_${field.id}" 
+                           value="${fieldValue}" ${field.id === 'conceptId' ? 'readonly' : ''}>
+                `;
+                break;
+                
+            case 'reference':
+                // Reference fields use the existing dropdown function
+                fieldInput = createReferenceDropdown(field);
+                // We'll need to set the selected value after rendering
+                setTimeout(() => {
+                    const selectElement = document.getElementById(`edit_${field.id}`);
+                    if (selectElement) {
+                        selectElement.value = fieldValue;
+                    }
+                }, 0);
+                break;
+                
+            case 'array':
+                if (Array.isArray(fieldValue)) {
+                    fieldInput = `
+                        <textarea class="form-control" id="edit_${field.id}" rows="3">${fieldValue.join(', ')}</textarea>
+                        <div class="form-text">Enter multiple values separated by commas</div>
+                    `;
+                } else {
+                    fieldInput = `
+                        <textarea class="form-control" id="edit_${field.id}" rows="3">${fieldValue}</textarea>
+                        <div class="form-text">Enter multiple values separated by commas</div>
+                    `;
+                }
+                break;
+                
+            case 'textarea':
+                fieldInput = `
+                    <textarea class="form-control" id="edit_${field.id}" rows="3">${fieldValue}</textarea>
+                `;
+                break;
+                
+            default:
+                fieldInput = `
+                    <input type="${field.type}" class="form-control" id="edit_${field.id}" 
+                           value="${fieldValue}" ${field.required ? 'required' : ''}>
+                `;
+        }
+        
+        fieldRow.innerHTML = `
+            <label for="edit_${field.id}" class="form-label">
+                ${field.label} ${field.required ? '<span class="text-danger">*</span>' : ''}
+            </label>
+            ${fieldInput}
+        `;
+        
+        editFields.appendChild(fieldRow);
+    });
+}
+
+function createFieldRow(key, value, fieldConfig = null) {
+    const row = document.createElement('div');
+    row.classList.add('row', 'mb-3', 'align-items-center');
+    
+    // Format the value based on its type
+    let formattedValue = value;
+    
+    if (fieldConfig) {
+        // Format based on field type
+        switch (fieldConfig.type) {
+            case 'reference':
+                // Format reference fields specially
+                formattedValue = `<span class="badge bg-secondary">${value}</span>`;
+                break;
+                
+            case 'array':
+                // Format arrays
+                if (Array.isArray(value)) {
+                    formattedValue = value.map(item => 
+                        `<span class="badge bg-light text-dark me-1 mb-1">${item}</span>`
+                    ).join('');
+                }
+                break;
+        }
+    } else {
+        // Format based on value type if no field config
+        if (Array.isArray(value)) {
+            formattedValue = value.map(item => 
+                `<span class="badge bg-light text-dark me-1 mb-1">${item}</span>`
+            ).join('');
+        } else if (typeof value === 'object' && value !== null) {
+            formattedValue = `<pre class="mb-0">${JSON.stringify(value, null, 2)}</pre>`;
+        }
+    }
+    
+    row.innerHTML = `
+        <div class="col-4">
+            <strong>${key}</strong>
+        </div>
+        <div class="col-8">
+            <div class="form-control-plaintext">${formattedValue}</div>
+        </div>
+    `;
+    
+    return row;
 }
 
 export const renderUploadModal = async (files) => {
@@ -654,4 +803,334 @@ export const renderAddFolderModal = () => {
             hideAnimation();
         }
     });
+}
+
+export const renderConfigModal = async () => {
+    const modal = document.getElementById('modal');
+    const modalHeader = modal.querySelector('.modal-header');
+    const modalBody = modal.querySelector('.modal-body');
+    const modalFooter = modal.querySelector('.modal-footer');
+    
+    // Get current config from appState
+    const { config } = appState.getState();
+    
+    // Set the modal title
+    modalHeader.innerHTML = `
+        <h5 class="modal-title">Configuration Settings</h5>
+    `;
+    
+    // Create the tab structure for different concept types
+    const conceptTypes = ['PRIMARY', 'SECONDARY', 'SOURCE', 'QUESTION', 'RESPONSE'];
+    
+    // Create tab headers
+    let tabHeaders = '<ul class="nav nav-tabs" id="configTabs" role="tablist">';
+    conceptTypes.forEach((type, index) => {
+        tabHeaders += `
+            <li class="nav-item" role="presentation">
+                <button class="nav-link ${index === 0 ? 'active' : ''}" 
+                    id="${type.toLowerCase()}-tab" 
+                    data-bs-toggle="tab" 
+                    data-bs-target="#${type.toLowerCase()}-pane" 
+                    type="button" 
+                    role="tab" 
+                    aria-controls="${type.toLowerCase()}-pane" 
+                    aria-selected="${index === 0 ? 'true' : 'false'}">
+                    ${type}
+                </button>
+            </li>
+        `;
+    });
+    tabHeaders += '</ul>';
+    
+    // Create tab content
+    let tabContent = '<div class="tab-content mt-3" id="configTabContent">';
+    conceptTypes.forEach((type, index) => {
+        tabContent += `
+            <div class="tab-pane fade ${index === 0 ? 'show active' : ''}" 
+                id="${type.toLowerCase()}-pane" 
+                role="tabpanel" 
+                aria-labelledby="${type.toLowerCase()}-tab" 
+                tabindex="0">
+                <div class="mb-3">
+                    <h6>${type} Fields</h6>
+                    <table class="table table-bordered table-sm">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Label</th>
+                                <th>Type</th>
+                                <th>Required</th>
+                                <th>Reference Type</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="${type.toLowerCase()}-fields">
+                            ${generateFieldRows(config[type] || [], type)}
+                        </tbody>
+                    </table>
+                    <button class="btn btn-sm btn-outline-primary add-field-btn" 
+                        data-type="${type}">
+                        <i class="bi bi-plus-circle"></i> Add Field
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    tabContent += '</div>';
+    
+    // Full modal body content
+    modalBody.innerHTML = `
+        ${tabHeaders}
+        ${tabContent}
+    `;
+    
+    // Set up the modal footer
+    modalFooter.innerHTML = `
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-outline-primary" id="saveConfigBtn">Save Changes</button>
+    `;
+    
+    // Show the modal
+    new bootstrap.Modal(modal).show();
+    
+    // Attach event listeners for adding new fields
+    document.querySelectorAll('.add-field-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const type = e.target.closest('button').getAttribute('data-type');
+            const tableBody = document.getElementById(`${type.toLowerCase()}-fields`);
+            
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td><input type="text" class="form-control form-control-sm field-id" value=""></td>
+                <td><input type="text" class="form-control form-control-sm field-label" value=""></td>
+                <td>
+                    <select class="form-select form-select-sm field-type">
+                        <option value="text">text</option>
+                        <option value="concept">concept</option>
+                        <option value="reference">reference</option>
+                        <option value="array">array</option>
+                        <option value="textarea">textarea</option>
+                    </select>
+                </td>
+                <td>
+                    <div class="form-check">
+                        <input class="form-check-input field-required" type="checkbox">
+                    </div>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm field-reference-type" disabled>
+                        <option value="">None</option>
+                        <option value="PRIMARY">PRIMARY</option>
+                        <option value="SECONDARY">SECONDARY</option>
+                        <option value="SOURCE">SOURCE</option>
+                        <option value="QUESTION">QUESTION</option>
+                        <option value="RESPONSE">RESPONSE</option>
+                    </select>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-danger delete-field-btn">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            `;
+            
+            tableBody.appendChild(newRow);
+            
+            // Enable/disable reference type selector based on field type
+            const typeSelect = newRow.querySelector('.field-type');
+            const refTypeSelect = newRow.querySelector('.field-reference-type');
+            
+            typeSelect.addEventListener('change', () => {
+                refTypeSelect.disabled = typeSelect.value !== 'reference';
+            });
+            
+            // Add delete event listener
+            newRow.querySelector('.delete-field-btn').addEventListener('click', () => {
+                tableBody.removeChild(newRow);
+            });
+        });
+    });
+    
+    // Attach event listeners to existing field type selectors
+    document.querySelectorAll('.field-type').forEach(select => {
+        select.addEventListener('change', (e) => {
+            const row = e.target.closest('tr');
+            const refTypeSelect = row.querySelector('.field-reference-type');
+            refTypeSelect.disabled = select.value !== 'reference';
+        });
+    });
+    
+    // Attach event listeners to delete buttons
+    document.querySelectorAll('.delete-field-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const row = e.target.closest('tr');
+            row.parentNode.removeChild(row);
+        });
+    });
+    
+    // Save button event listener
+    document.getElementById('saveConfigBtn').addEventListener('click', async () => {
+        showAnimation();
+        
+        try {
+            // Build new config object from UI
+            const newConfig = {};
+            
+            conceptTypes.forEach(type => {
+                newConfig[type] = [];
+                
+                const fieldRows = document.querySelectorAll(`#${type.toLowerCase()}-fields tr`);
+                fieldRows.forEach(row => {
+                    const id = row.querySelector('.field-id').value.trim();
+                    const label = row.querySelector('.field-label').value.trim();
+                    const fieldType = row.querySelector('.field-type').value;
+                    const required = row.querySelector('.field-required').checked;
+                    const referenceType = row.querySelector('.field-reference-type').value;
+                    
+                    // Skip empty rows
+                    if (!id || !label) return;
+                    
+                    const fieldConfig = {
+                        id,
+                        label,
+                        type: fieldType,
+                        required
+                    };
+                    
+                    // Add reference type if applicable
+                    if (fieldType === 'reference' && referenceType) {
+                        fieldConfig.referencesType = referenceType;
+                    }
+                    
+                    newConfig[type].push(fieldConfig);
+                });
+            });
+
+            console.log(newConfig);
+            
+            // Save to a config file in the repository
+            const file = await getFiles('config.json');
+            await updateFile(file.data.path, JSON.stringify(newConfig, null, 2), file.data.sha);
+            
+            // Update appState
+            appState.setState({ config: newConfig });
+            
+            // Close the modal
+            bootstrap.Modal.getInstance(modal).hide();
+        } catch (error) {
+            console.log(error);
+            alert('An error occurred while saving the configuration.');
+        } finally {
+            hideAnimation();
+        }
+    });
+}
+
+function generateFieldRows(fields, conceptType) {
+    if (!fields || !Array.isArray(fields)) return '';
+    
+    return fields.map(field => `
+        <tr>
+            <td><input type="text" class="form-control form-control-sm field-id" value="${field.id || ''}"></td>
+            <td><input type="text" class="form-control form-control-sm field-label" value="${field.label || ''}"></td>
+            <td>
+                <select class="form-select form-select-sm field-type">
+                    <option value="text" ${field.type === 'text' ? 'selected' : ''}>text</option>
+                    <option value="concept" ${field.type === 'concept' ? 'selected' : ''}>concept</option>
+                    <option value="reference" ${field.type === 'reference' ? 'selected' : ''}>reference</option>
+                    <option value="array" ${field.type === 'array' ? 'selected' : ''}>array</option>
+                    <option value="textarea" ${field.type === 'textarea' ? 'selected' : ''}>textarea</option>
+                </select>
+            </td>
+            <td>
+                <div class="form-check">
+                    <input class="form-check-input field-required" type="checkbox" ${field.required ? 'checked' : ''}>
+                </div>
+            </td>
+            <td>
+                <select class="form-select form-select-sm field-reference-type" ${field.type !== 'reference' ? 'disabled' : ''}>
+                    <option value="">None</option>
+                    <option value="PRIMARY" ${field.referencesType === 'PRIMARY' ? 'selected' : ''}>PRIMARY</option>
+                    <option value="SECONDARY" ${field.referencesType === 'SECONDARY' ? 'selected' : ''}>SECONDARY</option>
+                    <option value="SOURCE" ${field.referencesType === 'SOURCE' ? 'selected' : ''}>SOURCE</option>
+                    <option value="QUESTION" ${field.referencesType === 'QUESTION' ? 'selected' : ''}>QUESTION</option>
+                    <option value="RESPONSE" ${field.referencesType === 'RESPONSE' ? 'selected' : ''}>RESPONSE</option>
+                </select>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-outline-danger delete-field-btn">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function saveEditedConcept(originalContent, typeConfig, file) {
+    try {
+        showAnimation();
+        
+        // Create a new object with updated values
+        const updatedContent = { ...originalContent };
+        
+        // Update each field from the form
+        typeConfig.forEach(field => {
+            const fieldElement = document.getElementById(`edit_${field.id}`);
+            if (!fieldElement) return;
+            
+            let value = fieldElement.value;
+            
+            // Handle arrays and special types
+            if (field.type === 'array') {
+                if (value.trim()) {
+                    try {
+                        if (value.startsWith('[') && value.endsWith(']')) {
+                            // Try parsing as JSON
+                            value = JSON.parse(value);
+                        } else {
+                            // Split by comma
+                            value = value.split(',').map(item => item.trim()).filter(item => item);
+                        }
+                    } catch (e) {
+                        // If parsing fails, treat as a single value
+                        console.error('Error parsing array value:', e);
+                    }
+                } else {
+                    value = [];
+                }
+            }
+            
+            // Check if the field should be removed or updated
+            const isEmpty = (field.type === 'array' && Array.isArray(value) && value.length === 0) ||
+                           (field.type !== 'array' && (!value || value.trim() === ''));
+            
+            if (isEmpty && !field.required) {
+                // Remove the key from the object for non-required empty fields
+                delete updatedContent[field.id];
+            } else {
+                // Update the content with the new value
+                updatedContent[field.id] = value;
+            }
+        });
+        
+        // Prepare the file content
+        const content = JSON.stringify(updatedContent, null, 2);
+        
+        // Get the file SHA (needed for update)
+        const fileDetails = await getFiles(file);
+        const sha = fileDetails.data.sha;
+        
+        // Update the file
+        await updateFile(file, content, sha);
+        
+        // Close the modal
+        const modal = document.getElementById('modal');
+        bootstrap.Modal.getInstance(modal).hide();
+        
+    } catch (error) {
+        console.error('Error saving concept:', error);
+        alert('An error occurred while saving the concept.');
+    } finally {
+        hideAnimation();
+    }
 }

@@ -58,7 +58,27 @@ export const toBase64 = (string) => {
 }
 
 export const fromBase64 = (string) => {
-    return atob(string);
+    try {
+        // Handle null/undefined strings
+        if (!string) {
+            throw new Error('Base64 string is empty or null');
+        }
+        
+        // Clean the base64 string by removing whitespace and newlines
+        const cleanedString = string.replace(/\s/g, '');
+        
+        // Validate base64 format
+        const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+        if (!base64Regex.test(cleanedString)) {
+            throw new Error('Invalid base64 format');
+        }
+        
+        return atob(cleanedString);
+    } catch (error) {
+        console.error('Error decoding base64 string:', error);
+        console.error('Original string:', string);
+        throw new Error(`Failed to decode base64: ${error.message}`);
+    }
 }
 
 export const showAnimation = () => {
@@ -88,11 +108,37 @@ export const preventDefaults = (e) => {
 }
 
 export const getFileContent = async (file) => {
-    const contents = await getFiles(file);
-    const fileContentString = fromBase64(contents.data.content);
-    return {
-        content: JSON.parse(fileContentString)
-    };
+    try {
+        const contents = await getFiles(file);
+        
+        // Check if we have valid content
+        if (!contents || !contents.data || !contents.data.content) {
+            throw new Error('No content found in file response');
+        }
+        
+        const fileContentString = fromBase64(contents.data.content);
+        
+        // Validate that we have actual content after decoding
+        if (!fileContentString || fileContentString.trim() === '') {
+            throw new Error('File content is empty after decoding');
+        }
+        
+        return {
+            content: JSON.parse(fileContentString),
+            meta: contents.data
+        };
+    } catch (error) {
+        console.error(`Error loading file content for ${file}:`, error);
+        
+        // Provide more specific error messages
+        if (error.message.includes('base64')) {
+            throw new Error(`File "${file}" contains invalid or corrupted data that cannot be decoded.`);
+        } else if (error.message.includes('JSON')) {
+            throw new Error(`File "${file}" contains invalid JSON format.`);
+        } else {
+            throw new Error(`Failed to load file "${file}": ${error.message}`);
+        }
+    }
 }
 
 export const removeEventListeners = (element) => {

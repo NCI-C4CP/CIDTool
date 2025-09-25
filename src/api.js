@@ -1,8 +1,8 @@
 import { REDIRECT_URI, REDIRECT_URI_LOCAL } from '../config.js';
-import { toBase64, isLocal, appState } from './common.js';
+import { toBase64, isLocal, appState, fromBase64 } from './common.js';
 
-// const api = 'https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=';
-const api = 'http://localhost:8080/ghauth?api=';
+const api = 'https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=';
+// const api = 'http://localhost:8080/ghauth?api=';
 
 export const getUserDetails = async () => {
     
@@ -335,10 +335,11 @@ export const getConfigurationSettings = async () => {
                 'Accept': 'application/json',
             }
         });
-        console.log();
-        //const data = await response.json();
-        //appState.setState({ config: data });
-        //return data;
+        
+        const responseData = await response.json();
+        const data = fromBase64(responseData.data.content);
+
+        appState.setState({ config: JSON.parse(data) });
     }
     catch (error) {
         console.error(error);
