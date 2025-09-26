@@ -149,6 +149,169 @@ export const WELCOME_TEMPLATES = {
 };
 
 /**
+ * Homepage and repository browser templates
+ * @namespace HOMEPAGE_TEMPLATES
+ */
+export const HOMEPAGE_TEMPLATES = {
+    /**
+     * Repository list item template
+     * @param {Object} repo - Repository object from GitHub API
+     * @returns {string} HTML template for repository list item
+     */
+    repositoryListItem: (repo) => `
+        <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-folder-fill text-warning me-2"></i>
+                <strong>${repo.name}</strong>
+            </div>
+            <button class="btn btn-outline-primary btn-sm openRepoBtn" 
+                    data-repo-name="${repo.name}" 
+                    data-permissions="${JSON.stringify(repo.permissions)}">
+                <i class="bi bi-arrow-right"></i> Open Repository
+            </button>
+        </div>
+    `,
+
+    /**
+     * Repository browser search bar and controls
+     * @returns {string} HTML template for search bar and action buttons
+     */
+    searchBarAndControls: () => `
+        <div class="container mt-5">
+            <!-- Top bar with search and add button -->
+            <div class="row mb-3">
+                <div class="col-4">
+                    <div class="d-flex align-items-center">
+                        <input type="text" id="searchFiles" class="form-control form-control me-2 flex-grow-1" placeholder="Search files...">
+                        <button id="refreshButton" class="btn btn-outline-secondary btn me-2 flex-shrink-0">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                        <button id="backButton" class="btn btn-outline-secondary flex-shrink-0">
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-8 d-flex justify-content-end">
+                    <button id="addFolder" class="btn btn-secondary me-2">
+                        <i class="bi bi-folder-plus"></i> Add Folder
+                    </button>
+                    <button id="addFile" class="btn btn-primary me-2">
+                        <i class="bi bi-plus-lg"></i> Add Concept
+                    </button>
+                    <button id="configButton" class="btn btn-outline-secondary me-2">
+                        <i class="bi bi-gear"></i> Configure
+                    </button>
+                    <button id="downloadRepo" class="btn btn-primary">
+                        <i class="bi bi-download"></i> Download
+                    </button>
+                </div>
+            </div>
+
+            <!-- File list -->
+            <div id="fileList" class="list-group"></div>
+
+            <!-- Pagination controls -->
+            <div id="paginationControls" class="mt-3"></div>
+        </div>
+    `,
+
+    /**
+     * Directory item template for file list
+     * @param {Object} file - Directory file object
+     * @returns {string} HTML template for directory item
+     */
+    directoryItem: (file) => `
+        <div class="list-group-item d-flex align-items-center">
+            <div class="d-flex flex-column flex-grow-1 me-3 overflow-hidden">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-folder-fill text-warning me-2"></i>
+                    <strong class="text-truncate">${file.name}</strong>
+                </div>
+                <small class="text-muted text-truncate">&nbsp;</small>
+            </div>
+            <div class="d-flex flex-shrink-0">
+                <button class="btn btn-outline-primary btn-sm openDirBtn" data-path="${file.name}">
+                    <i class="bi bi-arrow-right"></i> Open
+                </button>
+            </div>
+        </div>
+    `,
+
+    /**
+     * File item template for file list
+     * @param {Object} file - File object
+     * @param {string} displayName - File name without extension
+     * @param {string} keyValue - Index key value for the file
+     * @param {boolean} hasWritePermission - Whether user can delete files
+     * @returns {string} HTML template for file item
+     */
+    fileItem: (file, displayName, keyValue, hasWritePermission) => `
+        <div class="list-group-item d-flex align-items-center">
+            <div class="d-flex flex-column flex-grow-1 me-3 overflow-hidden">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-file-earmark-text me-2"></i>
+                    <strong class="text-truncate">${displayName}</strong>
+                </div>
+                <small class="text-muted text-truncate">${keyValue}</small>
+            </div>
+            <div class="d-flex flex-shrink-0">
+                <button class="btn btn-outline-primary btn-sm viewFileBtn me-2" data-bs-file="${file.name}">
+                    <i class="bi bi-eye"></i> View
+                </button>
+                ${hasWritePermission ? 
+                    `<button class="btn btn-outline-danger btn-sm deleteFileBtn" data-bs-file="${file.name}" data-bs-sha="${file.sha}">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>`
+                    : ``
+                }
+            </div>
+        </div>
+    `,
+
+    /**
+     * Pagination controls template
+     * @param {number} totalPages - Total number of pages
+     * @param {number} currentPage - Current active page
+     * @returns {string} HTML template for pagination controls
+     */
+    paginationControls: (totalPages, currentPage) => {
+        if (totalPages <= 1) return '';
+
+        let paginationHTML = '<nav aria-label="Page navigation"><ul class="pagination justify-content-center">';
+
+        // Previous Button
+        paginationHTML += `
+            <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" aria-label="Previous" data-page="${currentPage - 1}">
+                    <span aria-hidden="true">&laquo;</span>
+                </a>
+            </li>
+        `;
+
+        // Page Numbers
+        for (let i = 1; i <= totalPages; i++) {
+            paginationHTML += `
+                <li class="page-item ${currentPage === i ? 'active' : ''}">
+                    <a class="page-link" href="#" data-page="${i}">${i}</a>
+                </li>
+            `;
+        }
+
+        // Next Button
+        paginationHTML += `
+            <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" aria-label="Next" data-page="${currentPage + 1}">
+                    <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+        `;
+
+        paginationHTML += '</ul></nav>';
+        return paginationHTML;
+    }
+};
+
+/**
  * Template utilities and helpers
  * @namespace TEMPLATE_UTILS
  */
