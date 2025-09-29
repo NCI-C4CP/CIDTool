@@ -1,13 +1,46 @@
-import { appState, executeWithAnimation, fromBase64 } from './common.js';
+/**
+ * Homepage and Repository Browser Module
+ * 
+ * @module homepage
+ * 
+ * @requires common - Utility functions and state management
+ * @requires api - GitHub API interaction functions
+ * @requires modals - Modal dialog rendering functions
+ * @requires files - File processing and spreadsheet generation
+ * @requires dictionary - Data structuring functions
+ * @requires templates - HTML template functions
+ * @requires events - UI event handling functions
+ */
+
+import { appState, executeWithAnimation, fromBase64, showUserNotification, getErrorMessage } from './common.js';
 import { getFiles, getRepoContents, getUserRepositories, getConfigurationSettings } from './api.js';
 import { renderAddModal, renderDeleteModal, renderAddFolderModal, renderViewModal, renderConfigModal } from './modals.js';
 import { generateSpreadsheet } from './files.js';
 import { structureFiles } from './dictionary.js';
 import { HOMEPAGE_TEMPLATES } from './templates.js';
+import { addEventOpenRepoButtons, addEventSearchBarControls, addEventFileListButtons, addEventPaginationControls } from './events.js';
+import { PAGINATION_CONFIG, FILE_FILTERS } from '../config.js';
 
+/**
+ * Renders the main homepage displaying the user's GitHub repositories
+ * 
+ * @async
+ * @function renderHomePage
+ * @description This is the main entry point for the authenticated user interface.
+ * It fetches and displays a list of the user's GitHub repositories, allowing them
+ * to select which repository to browse for concept dictionary management.
+ * 
+ * @throws {Error} If GitHub API fails or user repositories cannot be fetched
+ */
 export const renderHomePage = async () => {
     
-    appState.setState({ files: [], index: {}, objects: {}, currentPage: 1, itemsPerPage: 10 });
+    appState.setState({ 
+        files: [], 
+        index: {}, 
+        objects: {}, 
+        currentPage: PAGINATION_CONFIG.CURRENT_PAGE, 
+        itemsPerPage: PAGINATION_CONFIG.ITEMS_PER_PAGE 
+    });
 
     const repos = await getUserRepositories();
     const homeDiv = document.getElementById('auth');
@@ -22,21 +55,41 @@ export const renderHomePage = async () => {
     `;
 
     // Add event listeners for repository open buttons
-    const openRepoButtons = document.querySelectorAll('.openRepoBtn');
-    openRepoButtons.forEach(button => {
-        button.addEventListener('click', async (event) => {
-            const repoName = event.currentTarget.getAttribute('data-repo-name');
-            const permissions = JSON.parse(event.currentTarget.getAttribute('data-permissions'));
-            const repo = repos.data.find(r => r.name === repoName);
-            
-            // Update repo object with permissions for consistency
-            repo.permissions = permissions;
-            
-            await executeWithAnimation(renderRepoContent, repo, '');
-        });
-    });
+    addEventOpenRepoButtons(repos.data, renderRepoContent);
 }
 
+/**
+ * @async
+ * @function refreshHomePage
+ * @description Refreshes the currently displayed repository content without
+ * losing the user's current location (directory path). Used when files have
+ * been modified and the display needs to be updated.
+ * 
+ * @throws {Error} If repository content cannot be refreshed or API calls fail
+ */
+export const refreshHomePage = async () => {
+    
+    const { repo, directory } = appState.getState();
+    if (repo) {
+        await executeWithAnimation(renderRepoContent, repo, directory || '');
+    }
+}
+
+/**
+ * @async
+ * @function renderRepoContent
+ * @description Fetches and displays the contents of a GitHub repository directory,
+ * including concept files, folders, and metadata. Handles index.json and object.json
+ * files for concept dictionary functionality.
+ * 
+ * @param {Object} repo - Repository object from GitHub API
+ * @param {string} repo.owner.login - Repository owner's username
+ * @param {string} repo.name - Repository name
+ * @param {Object} repo.permissions - User's permissions for this repository
+ * @param {string} directory - Path to the directory within the repository
+ * 
+ * @throws {Error} If repository content cannot be fetched or parsed
+ */
 const renderRepoContent = async (repo, directory) => {
 
     const owner = repo.owner.login;
@@ -69,12 +122,8 @@ const renderRepoContent = async (repo, directory) => {
             objectContent = JSON.parse(objectContentString);
         }
 
-        // Exclude index.json from the files list
-        let filesWithoutIndex = files
-                                .filter(file => file.name !== 'index.json')
-                                .filter(file => file.name !== '.gitkeep')
-                                .filter(file => file.name !== 'object.json')
-                                .filter(file => file.name !== 'config.json');
+        // Exclude files using configuration constants
+        let filesWithoutIndex = files.filter(file => !FILE_FILTERS.EXCLUDED_FILES.includes(file.name));
 
         // If 'index.json' does NOT exist, display only directories
         if (!indexFile) {
@@ -89,84 +138,51 @@ const renderRepoContent = async (repo, directory) => {
         renderFileList();
     } catch (error) {
         console.error('Error fetching files or index:', error);
+        showUserNotification('error', getErrorMessage(error));
+        
+        // Still render the basic interface so user can navigate back
+        renderSearchBar();
+        document.getElementById('file-list').innerHTML = '<div class="alert alert-danger">Unable to load repository contents.</div>';
     }
 }
 
+/**
+ * Renders the search bar and control buttons for repository browsing
+ * 
+ * @function renderSearchBar
+ * @description Creates the main interface for repository browsing including:
+ * - Search input for filtering files
+ * - Navigation buttons (refresh, back)
+ * - Action buttons (add folder, add concept, configure, download)
+ * - Placeholders for file list and pagination
+ */
 const renderSearchBar = () => {
     const authDiv = document.getElementById('auth');
 
     // Use template for search bar and controls
     authDiv.innerHTML = HOMEPAGE_TEMPLATES.searchBarAndControls();
 
-    // Attach search event listener once
-    const searchInput = document.getElementById('searchFiles');
-    searchInput.addEventListener('input', (event) => {
-        const searchTerm = event.target.value.toLowerCase();
-        renderFileList(searchTerm);  // Pass the search term to filter files
-    });
-
-    // Attach add folder event listener
-    const addFolderButton = document.getElementById('addFolder');
-    addFolderButton.addEventListener('click', () => {
-        renderAddFolderModal();
-    });
-
-    // Attach add file event listener once
-    const addFileButton = document.getElementById('addFile');
-    addFileButton.addEventListener('click', () => {
-        executeWithAnimation(renderAddModal);
-    });
-
-    // Attach refresh event listener
-    const refreshButton = document.getElementById('refreshButton');
-    refreshButton.addEventListener('click', async () => {
-        refreshHomePage();
-    });
-
-    const backButton = document.getElementById('backButton');
-    backButton.addEventListener('click', async () => {
-        directoryBack();
-    });
-
-    const configButton = document.getElementById('configButton');
-    configButton.addEventListener('click', () => {
-        renderConfigModal();
-    });
-
-    const downloadRepoButton = document.getElementById('downloadRepo');
-    downloadRepoButton.addEventListener('click', async () => {
-        const contents = await getRepoContents();
-        const zip = await JSZip.loadAsync(contents);
-        const jsonDataArray = [];
-        const zipFiles = Object.keys(zip.files);
-        const basePath = zipFiles[0];
-        const { files, directory } = appState.getState();
-        const directoryFiles = files.filter(file => file.name.endsWith('.json'));
-
-        for (const file of directoryFiles) {
-
-            const fullPath = directory 
-            ? `${basePath}${directory}/${file.name}` 
-            : `${basePath}${file.name}`;
-
-            if (zip.files[fullPath]) {
-                try {
-                    const fileContent = await zip.files[fullPath].async('string');
-                    const jsonData = JSON.parse(fileContent);
-
-                    jsonDataArray.push(jsonData);
-                } catch (error) {
-                    console.error(`Error processing file ${fileName}:`, error);
-                }
-            }
-        }
-
-        let structuredData = structureFiles(jsonDataArray);
-        generateSpreadsheet(structuredData);
-
-    });
+    // Add event listeners for search bar and control buttons
+    addEventSearchBarControls(
+        renderFileList,
+        renderAddFolderModal,
+        renderAddModal,
+        refreshHomePage,
+        directoryBack,
+        renderConfigModal,
+        handleDownloadRepo
+    );
 };
 
+/**
+ * Renders the paginated file list with search functionality
+ * 
+ * @function renderFileList
+ * @description Displays repository files and directories in a paginated, searchable list.
+ * Handles filtering, sorting, and pagination of repository contents.
+ * 
+ * @param {string} [searchTerm=''] - Optional search term to filter files
+ */
 const renderFileList = (searchTerm = '') => {
     const fileListDiv = document.getElementById('fileList');
     const { repo, files, index, currentPage, itemsPerPage } = appState.getState();
@@ -178,6 +194,11 @@ const renderFileList = (searchTerm = '') => {
 
     const hasWritePermission = repo.permissions.push;
 
+    /**
+     * Removes file extension from filename for display purposes
+     * @param {string} fileName - The filename to process
+     * @returns {string} Filename without extension
+     */
     const getFileNameWithoutExtension = (fileName) => {
         const lastDotIndex = fileName.lastIndexOf('.');
         if (lastDotIndex === -1) return fileName; // No dot found, return original name
@@ -238,35 +259,18 @@ const renderFileList = (searchTerm = '') => {
     // Render pagination controls
     renderPaginationControls(totalPages, page);
 
-    // Add event listeners for directory open buttons
-    const openDirButtons = document.querySelectorAll('.openDirBtn');
-    openDirButtons.forEach(button => {
-        button.addEventListener('click', async (event) => {
-            const path = event.currentTarget.getAttribute('data-path');
-            const { repo, directory } = appState.getState();
-            const fullPath = directory ? `${directory}/${path}` : path;
-
-            await executeWithAnimation(renderRepoContent, repo, fullPath);
-        });
-    });
-
-    // for each delete button, add listener to render delete modal
-    const deleteButtons = document.querySelectorAll('.deleteFileBtn');
-    deleteButtons.forEach(button => {
-        button.addEventListener('click', event => {
-            renderDeleteModal(event);
-        });
-    });
-
-    // for each view button, add listener to render view modal
-    const viewButtons = document.querySelectorAll('.viewFileBtn');
-    viewButtons.forEach(button => {
-        button.addEventListener('click', event => {
-            renderViewModal(event);
-        });
-    });
+    // Add event listeners for file list buttons
+    addEventFileListButtons(renderRepoContent, renderDeleteModal, renderViewModal, appState);
 };
 
+/**
+ * @function renderPaginationControls
+ * @description Creates pagination interface with previous/next buttons and page numbers.
+ * Automatically hides pagination if there's only one page or no content.
+ * 
+ * @param {number} totalPages - Total number of pages available
+ * @param {number} currentPage - Currently active page number (1-indexed)
+ */
 const renderPaginationControls = (totalPages, currentPage) => {
     const paginationDiv = document.getElementById('paginationControls');
 
@@ -274,29 +278,58 @@ const renderPaginationControls = (totalPages, currentPage) => {
     paginationDiv.innerHTML = HOMEPAGE_TEMPLATES.paginationControls(totalPages, currentPage);
 
     // Attach event listeners to pagination links
-    const pageLinks = paginationDiv.querySelectorAll('.page-link');
-    pageLinks.forEach(link => {
-        link.addEventListener('click', (event) => {
-            event.preventDefault();
-            const page = parseInt(link.getAttribute('data-page'));
-            if (!isNaN(page)) {
-                appState.setState({ currentPage: page });
-                renderFileList(document.getElementById('searchFiles').value);
-            }
-        });
-    });
+    addEventPaginationControls(appState, renderFileList);
 };
 
-export const refreshHomePage = async () => {
-    
-    const { repo, directory } = appState.getState();
-    if (repo) {
-        await executeWithAnimation(renderRepoContent, repo, directory || '');
-    }
-}
-
+/**
+ * @async
+ * @function directoryBack
+ * @description Moves up one level in the directory hierarchy by removing the last
+ * directory segment from the current path and re-rendering the repository content.
+ * 
+ * @throws {Error} If navigation fails or parent directory cannot be accessed
+ */
 const directoryBack = async () => {
     const { repo, directory } = appState.getState();
     const newDirectory = directory.split('/').slice(0, -1).join('/');
     await executeWithAnimation(renderRepoContent, repo, newDirectory);
-}
+};
+
+/**
+ * Handles repository download functionality
+ * 
+ * @async
+ * @function handleDownloadRepo
+ * @description Downloads the entire repository as a ZIP file, extracts JSON concept files,
+ * structures the data, and generates an Excel spreadsheet for download.
+ * 
+ * @throws {Error} If download fails, ZIP extraction fails, or spreadsheet generation fails
+ */
+const handleDownloadRepo = async () => {
+    const contents = await getRepoContents();
+    const zip = await JSZip.loadAsync(contents);
+    const jsonDataArray = [];
+    const zipFiles = Object.keys(zip.files);
+    const basePath = zipFiles[0];
+    const { files, directory } = appState.getState();
+    const directoryFiles = files.filter(file => file.name.endsWith('.json'));
+
+    for (const file of directoryFiles) {
+        const fullPath = directory 
+            ? `${basePath}${directory}/${file.name}` 
+            : `${basePath}${file.name}`;
+
+        if (zip.files[fullPath]) {
+            try {
+                const fileContent = await zip.files[fullPath].async('string');
+                const jsonData = JSON.parse(fileContent);
+                jsonDataArray.push(jsonData);
+            } catch (error) {
+                console.error(`Error processing file ${file.name}:`, error);
+            }
+        }
+    }
+
+    let structuredData = structureFiles(jsonDataArray);
+    generateSpreadsheet(structuredData);
+};
