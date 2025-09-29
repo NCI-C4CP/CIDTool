@@ -1,5 +1,5 @@
-import { isLocal, preventDefaults } from './common.js';
-import { CLIENT_ID, REDIRECT_URI, CLIENT_ID_LOCAL, REDIRECT_URI_LOCAL, DOM_ELEMENTS } from '../config.js';
+import { isLocal, preventDefaults, executeWithAnimation, debounce } from './common.js';
+import { CLIENT_ID, REDIRECT_URI, CLIENT_ID_LOCAL, REDIRECT_URI_LOCAL, DOM_ELEMENTS, PERFORMANCE_CONFIG } from '../config.js';
 import { objectDropped } from "./files.js";
 
 /**
@@ -123,10 +123,8 @@ export const addEventDropClicked = () => {
  * Adds click event listener to the home icon for navigation
  * @param {string} homeIconId - The ID of the home icon element
  * @param {Function} renderHomePage - Function to render the home page
- * @param {Function} showAnimation - Function to show loading animation
- * @param {Function} hideAnimation - Function to hide loading animation
  */
-export const addEventHomeIconClick = (renderHomePage, showAnimation, hideAnimation) => {
+export const addEventHomeIconClick = (renderHomePage) => {
     const homeIcon = document.getElementById(DOM_ELEMENTS.HOME_ICON);
     if (!homeIcon) {
         console.warn(`Home icon element '${DOM_ELEMENTS.HOME_ICON}' not found`);
@@ -135,13 +133,174 @@ export const addEventHomeIconClick = (renderHomePage, showAnimation, hideAnimati
 
     homeIcon.addEventListener('click', async () => {
         try {
-            showAnimation();
-            await renderHomePage();
+            executeWithAnimation(renderHomePage);
         } catch (error) {
             console.error('Failed to render home page:', error);
             // Could show error message to user here
-        } finally {
-            hideAnimation();
         }
+    });
+};
+
+/**
+ * Adds click event listeners to repository open buttons
+ * @param {Array} repos - Array of repository objects
+ * @param {Function} renderRepoContent - Function to render repository content
+ */
+export const addEventOpenRepoButtons = (repos, renderRepoContent) => {
+    const openRepoButtons = document.querySelectorAll('.openRepoBtn');
+    openRepoButtons.forEach(button => {
+        button.addEventListener('click', async (event) => {
+            const repoName = event.currentTarget.getAttribute('data-repo-name');
+            const permissions = JSON.parse(event.currentTarget.getAttribute('data-permissions'));
+            const repo = repos.find(r => r.name === repoName);
+            
+            // Update repo object with permissions for consistency
+            repo.permissions = permissions;
+            
+            await executeWithAnimation(renderRepoContent, repo, '');
+        });
+    });
+};
+
+/**
+ * Adds event listeners to search bar and control buttons
+ * @param {Function} renderFileList - Function to render file list
+ * @param {Function} renderAddFolderModal - Function to render add folder modal
+ * @param {Function} renderAddModal - Function to render add modal
+ * @param {Function} refreshHomePage - Function to refresh homepage
+ * @param {Function} directoryBack - Function to navigate back
+ * @param {Function} renderConfigModal - Function to render config modal
+ * @param {Function} handleDownloadRepo - Function to handle repo download
+ */
+export const addEventSearchBarControls = (
+    renderFileList, 
+    renderAddFolderModal, 
+    renderAddModal, 
+    refreshHomePage, 
+    directoryBack, 
+    renderConfigModal, 
+    handleDownloadRepo
+) => {
+    // Search input event listener with debouncing for improved performance
+    const searchInput = document.getElementById('searchFiles');
+    if (searchInput) {
+        // Create debounced search function to avoid excessive renders while typing
+        const debouncedSearch = debounce((searchTerm) => {
+            renderFileList(searchTerm);
+        }, PERFORMANCE_CONFIG.SEARCH_DEBOUNCE_DELAY);
+        
+        searchInput.addEventListener('input', (event) => {
+            const searchTerm = event.target.value.toLowerCase();
+            debouncedSearch(searchTerm);
+        });
+    }
+
+    // Add folder button
+    const addFolderButton = document.getElementById('addFolder');
+    if (addFolderButton) {
+        addFolderButton.addEventListener('click', () => {
+            renderAddFolderModal();
+        });
+    }
+
+    // Add file button
+    const addFileButton = document.getElementById('addFile');
+    if (addFileButton) {
+        addFileButton.addEventListener('click', () => {
+            executeWithAnimation(renderAddModal);
+        });
+    }
+
+    // Refresh button
+    const refreshButton = document.getElementById('refreshButton');
+    if (refreshButton) {
+        refreshButton.addEventListener('click', async () => {
+            refreshHomePage();
+        });
+    }
+
+    // Back button
+    const backButton = document.getElementById('backButton');
+    if (backButton) {
+        backButton.addEventListener('click', async () => {
+            directoryBack();
+        });
+    }
+
+    // Config button
+    const configButton = document.getElementById('configButton');
+    if (configButton) {
+        configButton.addEventListener('click', () => {
+            renderConfigModal();
+        });
+    }
+
+    // Download repository button
+    const downloadRepoButton = document.getElementById('downloadRepo');
+    if (downloadRepoButton) {
+        downloadRepoButton.addEventListener('click', async () => {
+            handleDownloadRepo();
+        });
+    }
+};
+
+/**
+ * Adds click event listeners to file list buttons (directory open, view, delete)
+ * @param {Function} renderRepoContent - Function to render repository content
+ * @param {Function} renderDeleteModal - Function to render delete modal
+ * @param {Function} renderViewModal - Function to render view modal
+ * @param {Function} appState - Application state manager
+ */
+export const addEventFileListButtons = (renderRepoContent, renderDeleteModal, renderViewModal, appState) => {
+    // Directory open buttons
+    const openDirButtons = document.querySelectorAll('.openDirBtn');
+    openDirButtons.forEach(button => {
+        button.addEventListener('click', async (event) => {
+            const path = event.currentTarget.getAttribute('data-path');
+            const { repo, directory } = appState.getState();
+            const fullPath = directory ? `${directory}/${path}` : path;
+
+            await executeWithAnimation(renderRepoContent, repo, fullPath);
+        });
+    });
+
+    // Delete file buttons
+    const deleteButtons = document.querySelectorAll('.deleteFileBtn');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', event => {
+            renderDeleteModal(event);
+        });
+    });
+
+    // View file buttons
+    const viewButtons = document.querySelectorAll('.viewFileBtn');
+    viewButtons.forEach(button => {
+        button.addEventListener('click', event => {
+            renderViewModal(event);
+        });
+    });
+};
+
+/**
+ * Adds click event listeners to pagination controls
+ * @param {Function} appState - Application state manager
+ * @param {Function} renderFileList - Function to render file list
+ */
+export const addEventPaginationControls = (appState, renderFileList) => {
+    const paginationDiv = document.getElementById('paginationControls');
+    if (!paginationDiv) return;
+
+    const pageLinks = paginationDiv.querySelectorAll('.page-link');
+    pageLinks.forEach(link => {
+        link.addEventListener('click', (event) => {
+            event.preventDefault();
+            const page = parseInt(link.getAttribute('data-page'));
+            if (!isNaN(page)) {
+                appState.setState({ currentPage: page });
+                const searchInput = document.getElementById('searchFiles');
+                const searchTerm = searchInput ? searchInput.value : '';
+                renderFileList(searchTerm);
+            }
+        });
     });
 };
