@@ -1,347 +1,446 @@
-import { REDIRECT_URI, REDIRECT_URI_LOCAL } from '../config.js';
-import { toBase64, isLocal, appState, fromBase64 } from './common.js';
+/**
+ * GitHub API Integration Module
+ * 
+ * @module api
+ * 
+ * @requires config - Application configuration constants
+ * @requires common - Utility functions and state management
+ */
 
-const api = 'https://us-central1-nih-nci-dceg-connect-dev.cloudfunctions.net/ghauth?api=';
-// const api = 'http://localhost:8080/ghauth?api=';
+import { REDIRECT_URI, REDIRECT_URI_LOCAL, API_CONFIG } from '../config.js';
+import { toBase64, isLocal, appState, fromBase64, isTokenError, showUserNotification, getErrorMessage } from './common.js';
 
-export const getUserDetails = async () => {
+/**
+ * Gets the appropriate API base URL based on environment
+ * 
+ * @returns {string} The API base URL
+ */
+const getApiBaseUrl = () => {
+    return isLocal() ? API_CONFIG.BASE_URL_LOCAL : API_CONFIG.BASE_URL;
+};
+
+/**
+ * Creates standard headers for API requests
+ * @param {boolean} includeAuth - Whether to include authorization header
+ * @returns {Object} Headers object for fetch requests
+ */
+const createHeaders = (includeAuth = true) => {
+    const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    };
+    
+    if (includeAuth) {
+        const token = sessionStorage.getItem(API_CONFIG.TOKEN_KEY);
+        if (token) {
+            headers.Authorization = `Bearer ${token}`;
+        }
+    }
+    
+    return headers;
+};
+
+/**
+ * Validates API response and handles common error scenarios
+ * 
+ * @param {Response} response - Fetch response object
+ * @param {string} operation - Description of the operation for error context
+ * 
+ * @returns {Promise<Response>} The validated response
+ * @throws {Error} Throws error with user-friendly message for failed requests
+ */
+const validateResponse = async (response, operation) => {
+    if (!response.ok) {
+        const error = new Error(`${operation} failed`);
+        error.status = response.status;
+        error.statusText = response.statusText;
+        
+        // Handle token-related errors
+        if (isTokenError(error)) {
+            showUserNotification('error', 'Your session has expired. Please log in again.');
+            // Could trigger logout flow here
+        } else {
+            showUserNotification('error', getErrorMessage(error));
+        }
+        
+        throw error;
+    }
+    
+    return response;
+};
+
+/**
+ * Makes an authenticated API request with error handling
+ * @param {string} endpoint - API endpoint path
+ * @param {Object} options - Fetch options
+ * @param {string} operation - Description of operation for error handling
+ * @returns {Promise<any>} Parsed response data
+ */
+const makeApiRequest = async (endpoint, options = {}, operation = 'API request') => {
+    const url = `${getApiBaseUrl()}${endpoint}`;
+    
+    const requestOptions = {
+        headers: createHeaders(options.includeAuth !== false),
+        ...options
+    };
     
     try {
-        const response = await fetch(`${api}getUser`, {
-            method: 'GET',
-            headers: {
-                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            }
-        });
+        const response = await fetch(url, requestOptions);
+        await validateResponse(response, operation);
         
-        const data = await response.json();
-        return data;
+        // Handle different response types
+        if (options.responseType === 'blob') {
+            return await response.blob();
+        } else if (options.responseType === 'text') {
+            return await response.text();
+        } else {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error(`${operation} failed:`, error);
+        throw error;
     }
-    catch (error) {
-        console.error(error);
-    }
-}
+};
 
+/**
+ * Builds file path from current state and optional filename
+ * @param {string} fileName - Optional filename to append
+ * @param {string} suffix - Optional suffix to append (e.g., '.json')
+ * @returns {string} Complete file path
+ */
+const buildPath = (fileName = '', suffix = '') => {
+    const { directory } = appState.getState();
+    let path = directory ? `${directory}/` : '';
+    
+    if (fileName) {
+        path += fileName;
+    }
+    
+    if (suffix) {
+        path += suffix;
+    }
+    
+    return path;
+};
+
+/**
+ * Retrieves the authenticated user's GitHub profile information
+ * 
+ * @async
+ * @function getUserDetails
+ * 
+ * @returns {Promise<Object>} User profile data including login, name, avatar_url, etc.
+ * @throws {Error} Throws error if request fails or user is not authenticated
+ */
+export const getUserDetails = async () => {
+    return await makeApiRequest(
+        'getUser', 
+        { 
+            method: 'GET' 
+        }, 
+        'Get user details'
+    );
+};
+
+/**
+ * Exchanges GitHub OAuth authorization code for access token
+ * 
+ * @async
+ * @function getAccessToken
+ * @param {string} code - OAuth authorization code from GitHub callback
+ * 
+ * @returns {Promise<Object>} Token response containing access_token and user info
+ * @throws {Error} Throws error if token exchange fails
+ */
 export const getAccessToken = async (code) => {
-
-    let uri;
-    let local = isLocal();
-
-    if (local) {
-        uri = REDIRECT_URI_LOCAL;
-    }
-    else {
-        uri = REDIRECT_URI;
-    }
-
-    try {
-        const response = await fetch(`${api}accessToken${local ? '&environment=dev' : ''}`, {
+    const local = isLocal();
+    const uri = local ? REDIRECT_URI_LOCAL : REDIRECT_URI;
+    const endpoint = `accessToken${local ? '&environment=dev' : ''}`;
+    
+    return await makeApiRequest(
+        endpoint,
+        {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
+            includeAuth: false,
             body: JSON.stringify({
                 code: code,
                 redirect: uri
             })
-        });
+        },
+        'Get access token'
+    );
+};
 
-        const data = await response.json();
-        return data;
-    }
-    catch (error) {
-        console.error(error);
-    }
-}
-
-// used for downloading
+/**
+ * Downloads entire repository contents as a compressed archive
+ * 
+ * @async
+ * @function getRepoContents
+ * @returns {Promise<Blob>} Repository archive as blob for download
+ * 
+ * @throws {Error} Throws error if repository download fails
+ */
 export const getRepoContents = async () => {
+    const { owner, repoName } = appState.getState();
+    
+    return await makeApiRequest(
+        `getRepo&owner=${owner}&repo=${repoName}`,
+        { 
+            method: 'GET', 
+            responseType: 'blob' 
+        },
+        'Download repository contents'
+    );
+};
 
-    const state = appState.getState();
-    const { owner, repoName } = state;
-
-    try {
-        const response = await fetch(`${api}getRepo&owner=${owner}&repo=${repoName}`, {
-            method: 'GET',
-            headers: {
-                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            }
-        });
-        
-        const data = await response.blob();
-        return data;
-    }
-    catch (error) {
-        console.error(error);
-    }
-}
-
+/**
+ * Creates a new file in the repository
+ * 
+ * @async
+ * @function addFile
+ * @param {string} fileName - Name of the file to create
+ * @param {string} content - File content as string
+ * @returns {Promise<Object>} GitHub API response with file details
+ * 
+ * @throws {Error} Throws error if file creation fails
+ */
 export const addFile = async (fileName, content) => {
-    
-    const state = appState.getState();
-    const { owner, repoName, directory } = state;
+    const { owner, repoName } = appState.getState();
+    const path = buildPath(fileName);
 
-    let path = '';
-    if (directory) {
-        path = directory + '/';
-    }
-    
-    path = path + fileName;
-
-    try {
-        const response = await fetch(`${api}addFile`, {
+    return await makeApiRequest(
+        'addFile',
+        {
             method: 'POST',
-            headers: {
-                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
             body: JSON.stringify({
-                owner: owner,
+                owner,
                 repo: repoName,
                 path,
-                message: 'file added via CID Tool',
+                message: API_CONFIG.COMMIT_MESSAGES.ADD_FILE,
                 content: toBase64(content)
             })
-        });
-    
-        const data = await response.json();
-        return data;
-    }
-    catch (error) {
-        console.error(error);
-    }
-}
+        },
+        'Add file'
+    );
+};
 
+/**
+ * Creates a new folder in the repository by adding a .gitkeep file
+ * 
+ * @async
+ * @function addFolder
+ * @param {string} folderName - Name of the folder to create
+ * 
+ * @returns {Promise<Object>} GitHub API response with .gitkeep file details
+ * @throws {Error} Throws error if folder creation fails
+ */
 export const addFolder = async (folderName) => {
+    const { owner, repoName } = appState.getState();
+    const path = buildPath(folderName, '/.gitkeep');
 
-    const state = appState.getState();
-    const { owner, repoName, directory } = state;
-
-    let path = '';
-    if (directory) {
-        path = directory + '/';
-    }
-    
-    path = path + folderName + '/.gitkeep';
-
-    try {
-        const response = await fetch(`${api}addFile`, {
+    return await makeApiRequest(
+        'addFile',
+        {
             method: 'POST',
-            headers: {
-                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
             body: JSON.stringify({
-                owner: owner,
+                owner,
                 repo: repoName,
                 path,
-                message: 'folder added via CID Tool',
+                message: API_CONFIG.COMMIT_MESSAGES.ADD_FOLDER,
                 content: toBase64('')
             })
-        });
-    
-        const data = await response.json();
-        return data;
-    }
-    catch (error) {
-        console.error(error);
-    }
-}
+        },
+        'Add folder'
+    );
+};
 
+/**
+ * Updates an existing file in the repository
+ * 
+ * @async
+ * @function updateFile
+ * @param {string} fileName - Name of the file to update
+ * @param {string} content - New file content as string
+ * @param {string} sha - Current SHA hash of the file (required for updates)
+ * @returns {Promise<Object>} GitHub API response with updated file details
+ * @throws {Error} Throws error if file update fails
+ * 
+ * @example
+ * // Update an existing concept file
+ * const result = await updateFile('concept.json', newContent, currentSha);
+ * console.log(`File updated with new SHA: ${result.content.sha}`);
+ */
 export const updateFile = async (fileName, content, sha) => {
+    const { owner, repoName } = appState.getState();
+    const path = buildPath(fileName);
 
-    const state = appState.getState();
-    const { owner, repoName, directory } = state;
-
-    let path = '';
-    if (directory) {
-        path = directory + '/';
-    }
-    
-    path = path + fileName;
-
-    try {
-        const response = await fetch(`${api}updateFile`, {
+    return await makeApiRequest(
+        'updateFile',
+        {
             method: 'POST',
-            headers: {
-                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
             body: JSON.stringify({
-                owner: owner,
+                owner,
                 repo: repoName,
                 path,
                 sha,
-                message: 'file modified via CID Tool',
+                message: API_CONFIG.COMMIT_MESSAGES.UPDATE_FILE,
                 content: toBase64(content)
             })
-        });
-    
-        const data = await response.json();
-        return data;
-    }
-    catch (error) {
-        console.error(error);
-    }
+        },
+        'Update file'
+    );
+};
 
-}
-
+/**
+ * Deletes a file from the repository
+ * 
+ * @async
+ * @function deleteFile
+ * @param {string} fileName - Name of the file to delete
+ * @param {string} sha - Current SHA hash of the file (required for deletion)
+ * 
+ * @returns {Promise<Object>} GitHub API response confirming deletion
+ * @throws {Error} Throws error if file deletion fails
+ */
 export const deleteFile = async (fileName, sha) => {
+    const { owner, repoName } = appState.getState();
+    const path = buildPath(fileName);
 
-    const state = appState.getState();
-    const { owner, repoName, directory } = state;
-
-    let path = '';
-    if (directory) {
-        path = directory + '/';
-    }
-    
-    path = path + fileName;
-
-    try {
-        const response = await fetch(`${api}deleteFile`, {
+    return await makeApiRequest(
+        'deleteFile',
+        {
             method: 'POST',
-            headers: {
-                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
             body: JSON.stringify({
-                owner: owner,
+                owner,
                 repo: repoName,
                 path,
                 sha,
-                message: 'file deleted via CID Tool'
+                message: API_CONFIG.COMMIT_MESSAGES.DELETE_FILE
             })
-        });
-    
-        const data = await response.json();
-        return data;
-    }
-    catch (error) {
-        console.error(error);
-    }
-}
+        },
+        'Delete file'
+    );
+};
 
+/**
+ * Retrieves files and directories from the repository
+ * 
+ * @async
+ * @function getFiles
+ * @param {string} [fileName=''] - Optional specific file name to retrieve
+ * 
+ * @returns {Promise<Object>} GitHub API response with file/directory listing or file content
+ * @throws {Error} Throws error if file retrieval fails
+ */
 export const getFiles = async (fileName = '') => {
-
-    const state = appState.getState();
-    const { owner, repoName, directory } = state;
-
-    let path = '';
-    if (directory) {
-        path = directory;
-    }
-    if (fileName) {
-        path = path + '/' + fileName;
-    }
-
-    try {
-        const url = `${api}getFiles&owner=${owner}&repo=${repoName}&path=${path}`;
-
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            }
-        });
-
-        const data = await response.json();
-        return data;
-    }
-    catch (error) {
-        console.error(error);
-    }
-}
-
-export const getUserRepositories = async () => {
-
-    try {
-        const response = await fetch(`${api}getUserRepositories`, {
-            method: 'GET',
-            headers: {
-                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            }
-        });
-        
-        const data = await response.json();
-        return data;
-    }
-    catch (error) {
-        console.error(error);
-    }
-}
-
-export const getConcept = async () => {
-
-    const state = appState.getState();
-    const { owner, repoName, directory } = state;
-
-    let path = '';
-    if (directory) {
-        path = directory;
-    }
-
-    path += 'index.json';
-
-    try {
-        const response = await fetch(`${api}getConcept&owner=${owner}&repo=${repoName}&path=${path}`, {
-            method: 'GET',
-            headers: {
-                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            }
-        });
+    const { owner, repoName } = appState.getState();
+    const path = buildPath(fileName);
     
-        const data = await response.json();
-        return data.conceptID;
-    }
-    catch (error) {
-        console.error(error);
-    }
-}
+    return await makeApiRequest(
+        `getFiles&owner=${owner}&repo=${repoName}&path=${path}`,
+        { method: 'GET' },
+        'Get files'
+    );
+};
 
+/**
+ * Retrieves all repositories accessible to the authenticated user
+ * 
+ * @async
+ * @function getUserRepositories
+ * 
+ * @returns {Promise<Array>} Array of repository objects with name, owner, description, etc.
+ * @throws {Error} Throws error if repository retrieval fails
+ */
+export const getUserRepositories = async () => {
+    return await makeApiRequest(
+        'getUserRepositories',
+        { 
+            method: 'GET' 
+        },
+        'Get user repositories'
+    );
+};
+
+/**
+ * Retrieves concept ID from the index.json file in current directory
+ * 
+ * @async
+ * @function getConcept
+ * 
+ * @returns {Promise<string>} The concept ID from the index.json file
+ * @throws {Error} Throws error if concept retrieval fails or index.json doesn't exist
+ */
+export const getConcept = async () => {
+    const { owner, repoName } = appState.getState();
+    const path = buildPath('', 'index.json');
+    
+    const data = await makeApiRequest(
+        `getConcept&owner=${owner}&repo=${repoName}&path=${path}`,
+        { 
+            method: 'GET' 
+        },
+        'Get concept'
+    );
+    
+    return data.conceptID;
+};
+
+/**
+ * Retrieves and parses configuration settings from config.json file
+ * Updates the application state with the loaded configuration
+ * 
+ * @async
+ * @function getConfigurationSettings
+ * 
+ * @returns {Promise<void>} Doesn't return data, updates appState directly
+ * @throws {Error} Throws error if configuration retrieval or parsing fails
+ */
 export const getConfigurationSettings = async () => {
-
-    const state = appState.getState();
-    const { owner, repoName, directory } = state;
-
-    let path = '';
-    if (directory) {
-        path = directory + '/';
-    }
-
-    path += 'config.json';
-
+    const { owner, repoName } = appState.getState();
+    const path = buildPath('config.json');
+    
     try {
-        const response = await fetch(`${api}getConfig&owner=${owner}&repo=${repoName}&path=${path}`, {
-            method: 'GET',
-            headers: {
-                Authorization: `Bearer ${sessionStorage.getItem('gh_access_token')}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            }
-        });
+        const responseData = await makeApiRequest(
+            `getConfig&owner=${owner}&repo=${repoName}&path=${path}`,
+            { 
+                method: 'GET' 
+            },
+            'Get configuration settings'
+        );
         
-        const responseData = await response.json();
-        const data = fromBase64(responseData.data.content);
+        const configContent = fromBase64(responseData.data.content);
+        const config = JSON.parse(configContent);
+        
+        appState.setState({ config });
+    } catch (error) {
+        // Configuration is optional, so we don't want to show user errors for missing config
+        console.warn('Configuration file not found or invalid, using defaults');
+    }
+};
 
-        appState.setState({ config: JSON.parse(data) });
+/**
+ * Validates if the current GitHub access token is still valid
+ * 
+ * @async
+ * @function validateToken
+ * 
+ * @returns {Promise<boolean>} True if token is valid, false otherwise
+ */
+export const validateToken = async () => {
+    const token = sessionStorage.getItem(API_CONFIG.TOKEN_KEY);
+    if (!token) {
+        return false;
     }
-    catch (error) {
-        console.error(error);
+    
+    try {
+        await getUserDetails();
+        return true;
+    } catch (error) {
+        if (isTokenError(error)) {
+            return false;
+        }
+        // Other errors don't necessarily mean invalid token
+        return true;
     }
-}
+};
