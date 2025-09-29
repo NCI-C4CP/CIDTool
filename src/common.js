@@ -433,3 +433,63 @@ export const clearAuthenticationState = (sessionTokenKey) => {
         index: {}
     });
 };
+
+/**
+ * Creates a debounced version of a function that delays execution until after delay milliseconds
+ * have elapsed since the last time the debounced function was invoked
+ * @param {Function} func - The function to debounce
+ * @param {number} delay - The number of milliseconds to delay
+ * @returns {Function} The debounced function
+ */
+export const debounce = (func, delay) => {
+    let timeoutId;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => func.apply(null, args), delay);
+    };
+};
+
+/**
+ * Converts API errors to user-friendly error messages
+ * @param {Error} error - The error object from API call
+ * @returns {string} User-friendly error message
+ */
+export const getErrorMessage = (error) => {
+    if (error.status === 404) return 'Repository not found or access denied';
+    if (error.status === 403) return 'Insufficient permissions to access repository';
+    if (error.status === 401) return 'Authentication required. Please log in again.';
+    if (error.status === 500) return 'GitHub service temporarily unavailable';
+    if (error.status === 422) return 'Invalid repository or file format';
+    if (error.name === 'NetworkError') return 'Network connection error. Please check your internet connection.';
+    return 'Unable to load repository contents. Please try again.';
+};
+
+/**
+ * Shows a user notification message
+ * @param {string} type - The type of notification ('error', 'success', 'warning', 'info')
+ * @param {string} message - The message to display
+ * @param {number} duration - How long to show the message (milliseconds), 0 for permanent
+ */
+export const showUserNotification = (type, message, duration = 5000) => {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+    
+    notification.innerHTML = `
+        <strong>${type.charAt(0).toUpperCase() + type.slice(1)}:</strong> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto-remove after duration (if not permanent)
+    if (duration > 0) {
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, duration);
+    }
+};
