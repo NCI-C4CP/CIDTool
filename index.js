@@ -1,4 +1,4 @@
-import { appState, hideAnimation, showAnimation, escapeHtml, isTokenError, clearAuthenticationState } from "./src/common.js";
+import { appState, hideAnimation, escapeHtml, isTokenError, clearAuthenticationState, executeWithAnimation } from "./src/common.js";
 import { getAccessToken, getUserDetails } from "./src/api.js";
 import { login } from "./src/login.js";
 import { renderHomePage } from "./src/homepage.js";
@@ -28,10 +28,10 @@ const initializeApp = async () => {
         
         // Check for OAuth callback first
         if (isOAuthCallback()) {
-            await handleCallback();
+            executeWithAnimation(handleCallback);
         } else {
             // Handle normal app flow
-            await handleAppFlow();
+            executeWithAnimation(handleAppFlow);
         }
     } catch (error) {
         console.error('Application initialization error:', error);
@@ -108,7 +108,6 @@ const handleAppFlow = async () => {
  */
 const handleAuthenticatedFlow = async () => {
     try {
-        showAnimation();
         await initializeAuthenticatedUser();
     } catch (error) {
         console.error('Authenticated flow error:', error);
@@ -121,8 +120,6 @@ const handleAuthenticatedFlow = async () => {
             // Show error to user but stay authenticated
             appState.setState({ lastError: error.message });
         }
-    } finally {
-        hideAnimation();
     }
 };
 
@@ -184,7 +181,7 @@ const renderUserInterface = (userData) => {
     welcomeUserElement.innerHTML = WELCOME_TEMPLATES.userHeader(userData, DOM_ELEMENTS, escapeHtml);
 
     // Attach event handlers using events module
-    addEventHomeIconClick(renderHomePage, showAnimation, hideAnimation);
+    addEventHomeIconClick(renderHomePage);
 };
 
 /**
@@ -194,8 +191,6 @@ const renderUserInterface = (userData) => {
  * TODO: Validate token before storing (check scopes, etc.)
  */
 const handleCallback = async () => {
-    showAnimation();
-
     try {
         const code = new URL(window.location.href).searchParams.get(CONFIG.URL_PARAMS.AUTH_CODE);
         
@@ -229,8 +224,6 @@ const handleCallback = async () => {
     } catch (error) {
         console.error('OAuth callback error:', error);
         login();
-    } finally {
-        hideAnimation();
     }
 };
 
