@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Background circle -->
+  <circle cx="16" cy="16" r="15" fill="#0d6efd" stroke="#ffffff" stroke-width="2"/>
+  
+  <!-- Book/Dictionary icon -->
+  <g fill="#ffffff">
+    <!-- Book pages -->
+    <rect x="8" y="10" width="16" height="12" rx="1" fill="#ffffff"/>
+    <rect x="9" y="11" width="14" height="10" fill="#0d6efd"/>
+    
+    <!-- Book spine -->
+    <rect x="8" y="10" width="2" height="12" fill="#ffffff"/>
+    
+    <!-- Text lines -->
+    <rect x="11" y="13" width="8" height="1" fill="#ffffff"/>
+    <rect x="11" y="15" width="6" height="1" fill="#ffffff"/>
+    <rect x="11" y="17" width="7" height="1" fill="#ffffff"/>
+    <rect x="11" y="19" width="5" height="1" fill="#ffffff"/>
+  </g>
+</svg>
