@@ -521,7 +521,7 @@ export const HOMEPAGE_TEMPLATES = {
             </div>
             <button class="btn btn-outline-primary btn-sm openRepoBtn" 
                     data-repo-name="${repo.name}" 
-                    data-permissions="${JSON.stringify(repo.permissions)}">
+                    data-permissions='${JSON.stringify(repo.permissions)}'>
                 <i class="bi bi-arrow-right"></i> Open Repository
             </button>
         </div>

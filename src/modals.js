@@ -969,13 +969,8 @@ export const renderConfigModal = async () => {
     try {
         const { modal, header, body, footer } = ModalUtils.setupModal('Configuration Settings');
     
-    // Get current config from appState
-    const { config } = appState.getState();
-    
-    // Set the modal title
-    modalHeader.innerHTML = `
-        <h5 class="modal-title">Configuration Settings</h5>
-    `;
+        // Get current config from appState
+        const { config } = appState.getState();
     
         // Use template for configuration tabs
         body.innerHTML = MODAL_TEMPLATES.configurationTabs(
