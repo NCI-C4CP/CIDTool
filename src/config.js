@@ -120,8 +120,7 @@ export const MODAL_CONFIG = {
         { value: 'text', label: 'Text' },
         { value: 'concept', label: 'Concept' },
         { value: 'reference', label: 'Reference' },
-        { value: 'array', label: 'Array' },
-        { value: 'textarea', label: 'Textarea' }
+        { value: 'array', label: 'Array' }
     ],
 
     /** Validation messages */

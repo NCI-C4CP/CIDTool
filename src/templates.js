@@ -319,9 +319,6 @@ export const FORM_UTILS = {
                     <div class="form-text">Enter multiple values separated by commas</div>
                 `;
                 
-            case 'textarea':
-                return `<textarea class="form-control" id="${fieldId}" rows="3" ${attributes}>${value}</textarea>`;
-                
             case 'checkbox':
                 return `
                     <div class="form-check">
@@ -378,7 +375,6 @@ export const FORM_UTILS = {
                     <option value="concept" ${field.type === 'concept' ? 'selected' : ''}>concept</option>
                     <option value="reference" ${field.type === 'reference' ? 'selected' : ''}>reference</option>
                     <option value="array" ${field.type === 'array' ? 'selected' : ''}>array</option>
-                    <option value="textarea" ${field.type === 'textarea' ? 'selected' : ''}>textarea</option>
                 </select>
             </td>
             <td>
