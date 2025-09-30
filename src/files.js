@@ -1,7 +1,7 @@
 import { parseColumns, structureDictionary, structureFiles } from "./dictionary.js";
 import { assignConcepts } from "./concepts.js";
 import { appState, removeEventListeners } from "./common.js";
-import { renderUploadModal } from "./modals.js";
+import { renderUploadModal, renderAddModal } from "./modals.js";
 
 export const readSpreadsheet = async (file) => {
 
@@ -162,25 +162,22 @@ const handleFile = async (handle) => {
     const { isLoggedIn } = appState.getState();
 
     if(isLoggedIn) {
-        // Enable the Remote Save Button
+        // Enable the Review Import Button (new modal-based workflow)
         const remoteSaveButton = document.getElementById('remote-save-button');
+        remoteSaveButton.innerHTML = 'Review Import';
         remoteSaveButton.disabled = false;
         remoteSaveButton.hidden = false;
 
         remoteSaveButton.addEventListener('click', async () => {
             const { conceptObjects } = appState.getState();
-            const files = conceptObjects.map((conceptObject) => {
-                const name = `${conceptObject.conceptID}.json`;
-                const content = JSON.stringify(conceptObject);
-                return { name, content };
-            });
-
-            // Sort files by name
-            files.sort((a, b) => a.name.localeCompare(b.name));
-
-            if (importModal) importModal.hide();
-
-            renderUploadModal(files);
+            
+            if (!conceptObjects || conceptObjects.length === 0) {
+                alert('No concepts to review.');
+                return;
+            }
+            
+            // Start the import review process using our new queue system
+            ImportQueue.init(conceptObjects);
         });
     }
 
@@ -219,3 +216,117 @@ const handleDirectory = async (directoryHandle) => {
         if (importModal) importModal.hide();
     });
 }
+
+/**
+ * Import Queue Manager - handles sequential review of imported concepts
+ */
+export const ImportQueue = {
+    concepts: [],
+    currentIndex: 0,
+    acceptedConcepts: [],
+    skippedConcepts: [],
+    
+    /**
+     * Initialize import queue with concepts to review
+     * @param {Array} conceptsToReview - Array of concept objects from import
+     */
+    init(conceptsToReview) {
+        this.concepts = conceptsToReview;
+        this.currentIndex = 0;
+        this.acceptedConcepts = [];
+        this.skippedConcepts = [];
+        
+        if (this.concepts.length === 0) {
+            alert('No valid concepts found to import.');
+            return;
+        }
+        
+        // Close the import modal and start review process
+        const importModal = bootstrap.Modal.getInstance(document.getElementById('importModal'));
+        if (importModal) importModal.hide();
+        
+        // Start reviewing concepts
+        this.showNext();
+    },
+    
+    /**
+     * Show the next concept in the review queue
+     */
+    showNext() {
+        if (this.currentIndex < this.concepts.length) {
+            const concept = this.concepts[this.currentIndex];
+            const importOptions = {
+                title: 'Review Imported Concept',
+                current: this.currentIndex + 1,
+                total: this.concepts.length,
+                onAccept: (acceptedConcept) => this.onConceptAccepted(acceptedConcept),
+                onSkip: () => this.onConceptSkipped()
+            };
+            
+            // Open the add modal in import review mode
+            renderAddModal(concept, importOptions);
+        } else {
+            // All concepts reviewed - show completion summary
+            this.showCompletionSummary();
+        }
+    },
+    
+    /**
+     * Handle when a concept is accepted
+     * @param {Object} acceptedConcept - The accepted concept data
+     */
+    onConceptAccepted(acceptedConcept) {
+        this.acceptedConcepts.push({
+            original: this.concepts[this.currentIndex],
+            accepted: acceptedConcept
+        });
+        this.currentIndex++;
+        
+        // Small delay to allow modal to close before opening next one
+        setTimeout(() => this.showNext(), 100);
+    },
+    
+    /**
+     * Handle when a concept is skipped
+     */
+    onConceptSkipped() {
+        this.skippedConcepts.push(this.concepts[this.currentIndex]);
+        this.currentIndex++;
+        
+        // Small delay to allow modal to close before opening next one
+        setTimeout(() => this.showNext(), 100);
+    },
+    
+    /**
+     * Show import completion summary
+     */
+    showCompletionSummary() {
+        const total = this.concepts.length;
+        const accepted = this.acceptedConcepts.length;
+        const skipped = this.skippedConcepts.length;
+        
+        let message = `Import Review Complete!\n\n`;
+        message += `✅ ${accepted} concepts accepted and saved\n`;
+        message += `⏭️ ${skipped} concepts skipped\n`;
+        message += `📊 Total reviewed: ${total}`;
+        
+        if (skipped > 0) {
+            message += `\n\nSkipped concepts:\n`;
+            this.skippedConcepts.forEach((concept, index) => {
+                message += `• ${concept.key || concept.conceptId || `Concept ${index + 1}`}\n`;
+            });
+        }
+        
+        alert(message);
+        
+        // Refresh the page to show new concepts
+        if (accepted > 0) {
+            // Assuming we have access to refreshHomePage function
+            if (typeof refreshHomePage === 'function') {
+                refreshHomePage();
+            } else {
+                location.reload(); // Fallback
+            }
+        }
+    }
+};

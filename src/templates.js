@@ -92,9 +92,11 @@ export const MODAL_TEMPLATES = {
      * @returns {string} Modal footer HTML
      */
     footer: (buttons, layout = 'between') => {
-        const buttonElements = buttons.map(btn => 
-            `<button type="button" class="btn ${btn.class}" ${btn.attributes || ''}>${btn.text}</button>`
-        ).join('');
+        const buttonElements = buttons.map(btn => {
+            const id = btn.id ? `id="${btn.id}"` : '';
+            const attributes = btn.attributes || '';
+            return `<button type="button" class="btn ${btn.class}" ${id} ${attributes}>${btn.text}</button>`;
+        }).join('');
         
         const layoutClass = layout === 'between' ? 'justify-content-between' : 
                            layout === 'end' ? 'justify-content-end' : 'justify-content-start';

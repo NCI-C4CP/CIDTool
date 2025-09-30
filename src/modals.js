@@ -181,18 +181,25 @@ const ModalUtils = {
 };
 
 /**
- * Renders a modal for adding new concepts with dynamic form fields based on concept type
+ * Renders and displays the add concept modal
+ * Sets up form fields based on concept type selection and handles form submission
  * 
- * @async
  * @function renderAddModal
- * 
- * @returns {Promise<void>} Resolves when modal is rendered and event listeners are attached
+ * @param {Object} [importData=null] - Optional concept data from import (for review mode)
+ * @param {Object} [importOptions={}] - Optional import configuration
  * @throws {Error} Throws error if concept retrieval, modal setup, or form validation fails
  */
-export const renderAddModal = async () => {
+export const renderAddModal = async (importData = null, importOptions = {}) => {
     try {
         console.log(appState.getState());
-        const { modal, header, body, footer } = ModalUtils.setupModal('Add Concept');
+        
+        // Determine modal mode and title
+        const isImportMode = !!importData;
+        const modalTitle = isImportMode ? 
+            (importOptions.title || `Review Imported Concept ${importOptions.current ? `(${importOptions.current} of ${importOptions.total})` : ''}`) : 
+            'Add Concept';
+            
+        const { modal, header, body, footer } = ModalUtils.setupModal(modalTitle);
 
         const concept = await getConcept();
 
@@ -202,11 +209,17 @@ export const renderAddModal = async () => {
             ${MODAL_TEMPLATES.dynamicFieldContainers()}
         `;
 
-        // Use template for modal footer
-        footer.innerHTML = MODAL_TEMPLATES.footer([
+        // Use template for modal footer - different buttons for import mode
+        const footerButtons = isImportMode ? [
+            { text: 'Skip This Concept', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, id: 'skipImportBtn' },
+            { text: 'Cancel Import', class: MODAL_CONFIG.MODAL_CLASSES.DANGER, attributes: 'data-bs-dismiss="modal"' },
+            { text: 'Accept & Continue', class: MODAL_CONFIG.MODAL_CLASSES.SUCCESS, id: 'acceptImportBtn' }
+        ] : [
             { text: 'Cancel', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' },
             { text: 'Save', class: MODAL_CONFIG.MODAL_CLASSES.SUCCESS }
-        ]);
+        ];
+        
+        footer.innerHTML = MODAL_TEMPLATES.footer(footerButtons);
 
         // Function to render template fields based on selected type
         const renderTemplateFields = (type) => {
@@ -250,8 +263,14 @@ export const renderAddModal = async () => {
         // Show the modal
         ModalUtils.showModal(modal);
 
-        // Render the default template (PRIMARY)
-        renderTemplateFields('PRIMARY');
+        // Render the default template (PRIMARY or imported type)
+        const initialType = importData?.object_type || 'PRIMARY';
+        renderTemplateFields(initialType);
+        
+        // If we have import data, populate the form fields
+        if (isImportMode) {
+            populateFormWithImportData(importData);
+        }
         
         // Add event listener for type change
         document.getElementById('conceptType').addEventListener('change', (e) => {
@@ -262,7 +281,7 @@ export const renderAddModal = async () => {
             }
         });
 
-        // Add event listener for the Save button
+        // Add event listener for the Save/Accept button
         const confirmButton = modal.querySelector('.btn-outline-success');
         confirmButton.addEventListener('click', async () => {
             // Collect all the fields into a payload object
@@ -325,10 +344,18 @@ export const renderAddModal = async () => {
             // Add the file (assuming addFile is defined elsewhere)
             try {
                 await addFile(path, content);
+                
+                // Handle completion based on mode
+                if (isImportMode && importOptions.onAccept) {
+                    // Call import completion callback
+                    importOptions.onAccept(payload);
+                } else {
+                    // Standard add concept completion
+                    refreshHomePage();
+                }
+                
                 // Hide the modal
                 bootstrap.Modal.getInstance(modal).hide();
-                // Refresh the home page (assuming renderHomePage is defined elsewhere)
-                refreshHomePage();
             } catch (error) {
                 console.error('Error adding file:', error);
                 alert('An error occurred while saving the concept.');
@@ -337,10 +364,75 @@ export const renderAddModal = async () => {
                 hideAnimation();
             }
         });
+        
+        // Add event listener for Skip button (import mode only)
+        if (isImportMode) {
+            const skipButton = modal.querySelector('#skipImportBtn');
+            if (skipButton) {
+                skipButton.addEventListener('click', () => {
+                    // Call import options callback if provided
+                    if (importOptions.onSkip) {
+                        importOptions.onSkip();
+                    }
+                    bootstrap.Modal.getInstance(modal).hide();
+                });
+            }
+        }
         } catch (error) {
             ModalUtils.handleModalError(error, 'Add concept modal setup', modal);
         }
 }
+
+/**
+ * Populates form fields with imported concept data
+ * @param {Object} importData - The imported concept data
+ */
+const populateFormWithImportData = (importData) => {
+    // Set concept type selector
+    const conceptTypeSelect = document.getElementById('conceptType');
+    if (conceptTypeSelect && importData.object_type) {
+        conceptTypeSelect.value = importData.object_type;
+        // Trigger change event to update form fields
+        conceptTypeSelect.dispatchEvent(new Event('change'));
+    }
+    
+    // Populate form fields after a brief delay to ensure fields are rendered
+    setTimeout(() => {
+        Object.keys(importData).forEach(key => {
+            const field = document.getElementById(key);
+            if (field && importData[key] !== undefined) {
+                if (field.type === 'checkbox') {
+                    field.checked = !!importData[key];
+                } else if (field.tagName === 'SELECT') {
+                    field.value = importData[key];
+                } else {
+                    field.value = typeof importData[key] === 'object' ? 
+                        JSON.stringify(importData[key]) : 
+                        importData[key];
+                }
+                
+                // Trigger validation styling if field has errors
+                if (field.value && !validateField(field, importData[key])) {
+                    field.classList.add('is-invalid');
+                }
+            }
+        });
+    }, 100);
+};
+
+/**
+ * Basic field validation helper
+ * @param {HTMLElement} field - The form field element
+ * @param {*} value - The field value
+ * @returns {boolean} - Whether the field is valid
+ */
+const validateField = (field, value) => {
+    // Basic validation - can be expanded
+    if (field.required && (!value || value.toString().trim() === '')) {
+        return false;
+    }
+    return true;
+};
 
 const setupResponseMultiSelect = () => {
     const container = document.getElementById('responses_container');
