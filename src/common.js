@@ -6,6 +6,7 @@ import { getFiles } from './api.js';
  * @returns {boolean} Always returns true
  */
 export const displayError = (message) => {
+    console.error(message);
     alert(message);
     return true;
 }

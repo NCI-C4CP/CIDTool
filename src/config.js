@@ -12,7 +12,8 @@ export const CONFIG = {
     SESSION_TOKEN_KEY: 'gh_access_token',
     URL_PARAMS: {
         AUTH_CODE: 'code'
-    }
+    },
+    CONCEPT_FORMAT: '^\\d{9}$'
 };
 
 /**

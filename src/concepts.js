@@ -1,3 +1,6 @@
+import { CONFIG } from "./config.js";
+import { displayError } from "./common.js";
+
 export const assignConcepts = (categories, data) => {
 
     let concepts = [];
@@ -41,7 +44,7 @@ const validateConceptID = (id) => {
 
     if (typeof id !== 'number') return false;
 
-    const regex = /^\d{9}$/;
+    const regex = new RegExp(CONFIG.CONCEPT_FORMAT);
 
     return regex.test(id);
 }

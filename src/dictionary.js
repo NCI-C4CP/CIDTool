@@ -1,4 +1,5 @@
 import { objectExists, isEmpty, uniqueKeys } from "./common.js";
+import { MODAL_CONFIG } from "./config.js";
 
 export const parseColumns = (headers) => {
     
@@ -35,12 +36,10 @@ const getExtraKeys = (object) => {
 export const structureDictionary = (mapping, columns, data) => {
 
     let conceptObjects = [];
-
-    conceptObjects = findObjects(mapping, columns, data, 'PRIMARY', conceptObjects);
-    conceptObjects = findObjects(mapping, columns, data, 'SECONDARY', conceptObjects);
-    conceptObjects = findObjects(mapping, columns, data, 'SOURCE', conceptObjects);
-    conceptObjects = findObjects(mapping, columns, data, 'RESPONSE', conceptObjects);
-    conceptObjects = findObjects(mapping, columns, data, 'QUESTION', conceptObjects);
+    
+    for (const conceptType of MODAL_CONFIG.CONCEPT_TYPES) {
+        conceptObjects = findObjects(mapping, columns, data, conceptType, conceptObjects);
+    }
     
     return conceptObjects;
 }
