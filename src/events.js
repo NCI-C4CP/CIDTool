@@ -1,4 +1,4 @@
-import { isLocal, preventDefaults, executeWithAnimation, debounce } from './common.js';
+import { isLocal, preventDefaults, executeWithAnimation, debounce, appState } from './common.js';
 import { CLIENT_ID, REDIRECT_URI, CLIENT_ID_LOCAL, REDIRECT_URI_LOCAL, DOM_ELEMENTS, PERFORMANCE_CONFIG } from './config.js';
 import { objectDropped } from "./files.js";
 
@@ -81,6 +81,9 @@ export const addEventDropClicked = () => {
         return;
     }
     
+    // Set up state watcher to enable/disable import button based on repository
+    setupStateWatcher(importButton, 'repo', updateImportButtonState);
+    
     // Get the import modal element
     const importModalElement = document.getElementById(DOM_ELEMENTS.IMPORT_MODAL);
     
@@ -96,6 +99,12 @@ export const addEventDropClicked = () => {
 
     // Add click event listener to the import button
     importButton.addEventListener('click', () => {
+        // Check if we're in a repository before opening modal
+        const { repo } = appState.getState();
+        if (!repo) {
+            alert('Please open a repository first to use the import feature.');
+            return;
+        }
         const dropZone = document.getElementById(DOM_ELEMENTS.DROP_ZONE_CONTENT);
         const remoteSaveButton = document.getElementById(DOM_ELEMENTS.REMOTE_SAVE_BUTTON);
         const saveButton = document.getElementById(DOM_ELEMENTS.SAVE_BUTTON);
@@ -303,4 +312,40 @@ export const addEventPaginationControls = (appState, renderFileList) => {
             }
         });
     });
+};
+
+/**
+ * Sets up a state watcher for any element with a custom update function
+ * @param {HTMLElement} element - The element to watch
+ * @param {string} stateKey - The state key to watch for changes
+ * @param {Function} updateFunction - Function to call when state changes
+ */
+const setupStateWatcher = (element, stateKey, updateFunction) => {
+    // Set initial state
+    updateFunction(element);
+    
+    // Watch for changes to the specified state key
+    appState.watch(stateKey, (newValue) => {
+        updateFunction(element);
+    });
+};
+
+/**
+ * Updates the import button's enabled/disabled state
+ * @param {HTMLElement} importButton - The import button element
+ */
+const updateImportButtonState = (importButton) => {
+    const { repo } = appState.getState();
+    
+    if (repo) {
+        // Enable button when in repository
+        importButton.disabled = false;
+        importButton.classList.remove('text-muted');
+        importButton.title = 'Import files or folders';
+    } else {
+        // Disable button when not in repository
+        importButton.disabled = true;
+        importButton.classList.add('text-muted');
+        importButton.title = 'Open a repository to use import feature';
+    }
 };

@@ -35,3 +35,9 @@
 #drop-zone button {
     pointer-events: auto;
 }
+
+/* Import button disabled state */
+button:disabled.text-muted {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

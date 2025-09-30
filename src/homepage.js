@@ -39,7 +39,8 @@ export const renderHomePage = async () => {
         index: {}, 
         objects: {}, 
         currentPage: PAGINATION_CONFIG.DEFAULT_CURRENT_PAGE, 
-        itemsPerPage: PAGINATION_CONFIG.DEFAULT_ITEMS_PER_PAGE 
+        itemsPerPage: PAGINATION_CONFIG.DEFAULT_ITEMS_PER_PAGE,
+        repo: null
     });
 
     const repos = await getUserRepositories();

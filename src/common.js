@@ -64,18 +64,50 @@ export const uniqueKeys = (objects) => {
  */
 const createStore = (initialState = {}) => {
     let state = initialState;
+    const watchers = new Map();
   
     const setState = (update) => {
+      const prevState = state;
       const currSlice = typeof update === 'function' ? update(state) : update;
   
       if (currSlice !== state) {
         state = { ...state, ...currSlice };
+        
+        // Notify watchers of changed keys
+        Object.keys(currSlice).forEach(key => {
+          if (watchers.has(key) && prevState[key] !== state[key]) {
+            watchers.get(key).forEach(callback => {
+              try {
+                callback(state[key], prevState[key]);
+              } catch (error) {
+                console.error(`State watcher error for key "${key}":`, error);
+              }
+            });
+          }
+        });
       }
     };
   
     const getState = () => state;
+    
+    const watch = (key, callback) => {
+      if (!watchers.has(key)) {
+        watchers.set(key, new Set());
+      }
+      watchers.get(key).add(callback);
+      
+      // Return unwatch function
+      return () => {
+        if (watchers.has(key)) {
+          watchers.get(key).delete(callback);
+          if (watchers.get(key).size === 0) {
+            watchers.delete(key);
+          }
+        }
+      };
+    };
   
-    return { setState, getState };
+    return { setState, getState, watch };
 }
 
 /**
