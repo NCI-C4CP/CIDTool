@@ -15,7 +15,7 @@
 import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, validateFormFields, showUserNotification } from './common.js';
 import { addFile, deleteFile, addFolder, getConcept, getFiles, updateFile } from './api.js';
 import { refreshHomePage } from './homepage.js';
-import { MODAL_CONFIG } from '../config.js';
+import { MODAL_CONFIG } from './config.js';
 import { MODAL_TEMPLATES, FORM_UTILS } from './templates.js';
 
 /**
@@ -737,7 +737,7 @@ function renderEditMode(container, content, typeConfig) {
         if (field.type === 'reference') {
             const fieldRow = document.createElement('div');
             fieldRow.innerHTML = FORM_UTILS.generateFormField(field, fieldValue, 'edit');
-            
+
             // Replace the select with reference dropdown
             const selectElement = fieldRow.querySelector('select');
             if (selectElement) {

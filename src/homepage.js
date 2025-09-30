@@ -19,7 +19,7 @@ import { generateSpreadsheet } from './files.js';
 import { structureFiles } from './dictionary.js';
 import { HOMEPAGE_TEMPLATES } from './templates.js';
 import { addEventOpenRepoButtons, addEventSearchBarControls, addEventFileListButtons, addEventPaginationControls } from './events.js';
-import { PAGINATION_CONFIG, FILE_FILTERS } from '../config.js';
+import { PAGINATION_CONFIG, FILE_FILTERS } from './config.js';
 
 /**
  * Renders the main homepage displaying the user's GitHub repositories

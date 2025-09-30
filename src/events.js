@@ -1,5 +1,5 @@
 import { isLocal, preventDefaults, executeWithAnimation, debounce } from './common.js';
-import { CLIENT_ID, REDIRECT_URI, CLIENT_ID_LOCAL, REDIRECT_URI_LOCAL, DOM_ELEMENTS, PERFORMANCE_CONFIG } from '../config.js';
+import { CLIENT_ID, REDIRECT_URI, CLIENT_ID_LOCAL, REDIRECT_URI_LOCAL, DOM_ELEMENTS, PERFORMANCE_CONFIG } from './config.js';
 import { objectDropped } from "./files.js";
 
 /**

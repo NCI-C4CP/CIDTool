@@ -4,7 +4,7 @@ import { login } from "./src/login.js";
 import { renderHomePage } from "./src/homepage.js";
 import { addEventFileDrop, addEventDropClicked, addEventHomeIconClick } from "./src/events.js";
 import { WELCOME_TEMPLATES } from "./src/templates.js";
-import { CONFIG, DOM_ELEMENTS } from "./config.js";
+import { CONFIG, DOM_ELEMENTS } from "./src/config.js";
 
 /**
  * Initializes the application when the window loads

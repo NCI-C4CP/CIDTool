@@ -7,7 +7,7 @@
  * @requires common - Utility functions and state management
  */
 
-import { REDIRECT_URI, REDIRECT_URI_LOCAL, API_CONFIG } from '../config.js';
+import { REDIRECT_URI, REDIRECT_URI_LOCAL, API_CONFIG } from './config.js';
 import { toBase64, isLocal, appState, fromBase64, isTokenError, showUserNotification, getErrorMessage } from './common.js';
 
 /**
