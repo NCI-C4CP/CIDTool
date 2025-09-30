@@ -4,7 +4,7 @@ import { login } from "./src/login.js";
 import { renderHomePage } from "./src/homepage.js";
 import { addEventFileDrop, addEventDropClicked, addEventHomeIconClick } from "./src/events.js";
 import { WELCOME_TEMPLATES } from "./src/templates.js";
-import { CONFIG, DOM_ELEMENTS } from "./src/config.js";
+import { CONFIG, PAGINATION_CONFIG, DOM_ELEMENTS } from "./src/config.js";
 
 /**
  * Initializes the application when the window loads
@@ -51,8 +51,8 @@ const initializeAppState = () => {
         isLoggedIn: !!accessToken,
         files: [],
         index: {},
-        currentPage: 1,
-        itemsPerPage: CONFIG.ITEMS_PER_PAGE,
+        currentPage: PAGINATION_CONFIG.DEFAULT_CURRENT_PAGE,
+        itemsPerPage: PAGINATION_CONFIG.DEFAULT_ITEMS_PER_PAGE,
         user: null,
         lastError: null
     });

@@ -19,7 +19,7 @@ import { generateSpreadsheet } from './files.js';
 import { structureFiles } from './dictionary.js';
 import { HOMEPAGE_TEMPLATES } from './templates.js';
 import { addEventOpenRepoButtons, addEventSearchBarControls, addEventFileListButtons, addEventPaginationControls } from './events.js';
-import { PAGINATION_CONFIG, FILE_FILTERS } from './config.js';
+import { PAGINATION_CONFIG, FILE_FILTERS, CONFIG } from './config.js';
 
 /**
  * Renders the main homepage displaying the user's GitHub repositories
@@ -38,8 +38,8 @@ export const renderHomePage = async () => {
         files: [], 
         index: {}, 
         objects: {}, 
-        currentPage: PAGINATION_CONFIG.CURRENT_PAGE, 
-        itemsPerPage: PAGINATION_CONFIG.ITEMS_PER_PAGE 
+        currentPage: PAGINATION_CONFIG.DEFAULT_CURRENT_PAGE, 
+        itemsPerPage: PAGINATION_CONFIG.DEFAULT_ITEMS_PER_PAGE 
     });
 
     const repos = await getUserRepositories();
@@ -231,14 +231,14 @@ const renderFileList = (searchTerm = '') => {
 
     // Calculate pagination
     const totalItems = filteredFiles.length;
-    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const totalPages = Math.ceil(totalItems / CONFIG.ITEMS_PER_PAGE);
 
     // Ensure currentPage is within valid range
     const page = Math.min(Math.max(currentPage, 1), totalPages);
 
     // Calculate start and end indices
-    const startIndex = (page - 1) * itemsPerPage;
-    const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+    const startIndex = (page - 1) * CONFIG.ITEMS_PER_PAGE;
+    const endIndex = Math.min(startIndex + CONFIG.ITEMS_PER_PAGE, totalItems);
 
     // Get the files for the current page
     const filesToDisplay = filteredFiles.slice(startIndex, endIndex);

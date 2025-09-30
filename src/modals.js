@@ -967,7 +967,7 @@ export const renderAddFolderModal = () => {
  */
 export const renderConfigModal = async () => {
     try {
-        const { modal, header, body, footer } = ModalUtils.setupModal('Configuration Settings');
+        const { modal, body, footer } = ModalUtils.setupModal('Configuration Settings');
     
         // Get current config from appState
         const { config } = appState.getState();
@@ -985,7 +985,7 @@ export const renderConfigModal = async () => {
         ]);
     
     // Show the modal
-    new bootstrap.Modal(modal).show();
+    ModalUtils.showModal(modal);
     
     // Attach event listeners for adding new fields
     document.querySelectorAll('.add-field-btn').forEach(button => {
