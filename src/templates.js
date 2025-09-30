@@ -69,10 +69,365 @@ export const LOGIN_TEMPLATES = {
      * @returns {string} HTML alert template
      */
     errorAlert: (message) => `
-        <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
             <strong>Authentication Error:</strong> ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `
+};
+
+/**
+ * Modal templates for various dialog types
+ * @namespace MODAL_TEMPLATES
+ */
+export const MODAL_TEMPLATES = {
+    /**
+     * Standard modal footer with button configuration
+     * @param {Array<Object>} buttons - Array of button configurations
+     * @param {string} buttons[].text - Button text
+     * @param {string} buttons[].class - Button CSS classes
+     * @param {string} buttons[].attributes - Additional HTML attributes
+     * @param {string} layout - Footer layout ('between', 'end', 'start')
+     * @returns {string} Modal footer HTML
+     */
+    footer: (buttons, layout = 'between') => {
+        const buttonElements = buttons.map(btn => 
+            `<button type="button" class="btn ${btn.class}" ${btn.attributes || ''}>${btn.text}</button>`
+        ).join('');
+        
+        const layoutClass = layout === 'between' ? 'justify-content-between' : 
+                           layout === 'end' ? 'justify-content-end' : 'justify-content-start';
+        
+        return `
+            <div class="w-100 d-flex ${layoutClass}">
+                ${layout === 'between' ? '<div></div>' : ''}
+                <div>${buttonElements}</div>
+            </div>
+        `;
+    },
+
+    /**
+     * Concept type selector dropdown
+     * @param {Array<string>} conceptTypes - Available concept types
+     * @param {string} selectedType - Currently selected type
+     * @returns {string} Concept type selector HTML
+     */
+    conceptTypeSelector: (conceptTypes, selectedType = 'PRIMARY') => `
+        <div class="row mb-3">
+            <div class="col-4">
+                <label for="conceptType" class="col-form-label">Concept Type</label>
+            </div>
+            <div class="col-8">
+                <select class="form-select" id="conceptType">
+                    ${conceptTypes.map(type => `
+                        <option value="${type}" ${type === selectedType ? 'selected' : ''}>${type}</option>
+                    `).join('')}
+                </select>
+            </div>
+        </div>
+    `,
+
+    /**
+     * Dynamic form field containers
+     * @returns {string} Container divs for dynamic field generation
+     */
+    dynamicFieldContainers: () => `
+        <div id="templateFields"></div>
+        <div id="additionalFields"></div>
+    `,
+
+    /**
+     * File upload progress item
+     * @param {string} fileName - Name of the file being uploaded
+     * @returns {string} File upload progress row HTML
+     */
+    uploadProgressItem: (fileName) => `
+        <div class="d-flex align-items-center mb-2">
+            <div class="flex-grow-1">${fileName}</div>
+            <div class="status-indicator">
+                <span class="status-text ms-1">Pending...</span>
+            </div>
+        </div>
+    `,
+
+    /**
+     * Upload progress status indicators
+     */
+    uploadStatus: {
+        processing: () => `
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span class="status-text ms-1">Processing...</span>
+        `,
+        success: () => '<span class="text-success">Uploaded successfully</span>',
+        failed: () => '<span class="text-danger">Upload failed</span>'
+    },
+
+    /**
+     * Form field row with label and input
+     * @param {Object} field - Field configuration
+     * @param {string} field.id - Field ID
+     * @param {string} field.label - Field label
+     * @param {string} field.required - Whether field is required
+     * @param {string} inputHTML - HTML for the input element
+     * @returns {string} Form field row HTML
+     */
+    formFieldRow: (field, inputHTML) => `
+        <div class="row mb-3">
+            <div class="col-4">
+                <label for="${field.id}" class="col-form-label">
+                    ${field.label}${field.required ? ' <span class="text-danger">*</span>' : ''}
+                </label>
+            </div>
+            <div class="col-8">
+                ${inputHTML}
+            </div>
+        </div>
+    `,
+
+    /**
+     * Simple form field for edit mode
+     * @param {Object} field - Field configuration
+     * @param {string} inputHTML - HTML for the input element
+     * @returns {string} Simple form field HTML
+     */
+    editFormField: (field, inputHTML) => `
+        <div class="mb-3">
+            <label for="edit_${field.id}" class="form-label">
+                ${field.label}${field.required ? ' <span class="text-danger">*</span>' : ''}
+            </label>
+            ${inputHTML}
+        </div>
+    `,
+
+    /**
+     * Error message alert
+     * @param {string} title - Error title
+     * @param {string} message - Error message
+     * @param {string} details - Additional error details (optional)
+     * @returns {string} Error alert HTML
+     */
+    errorAlert: (title, message, details = '') => `
+        <div class="alert alert-danger">
+            <h6><i class="bi bi-exclamation-triangle"></i> ${title}</h6>
+            <p>${message}</p>
+            ${details ? `<small class="text-muted">${details}</small>` : ''}
+        </div>
+    `,
+
+    /**
+     * Confirmation dialog template with customizable title and message
+     * @param {string} title - Dialog title 
+     * @param {string} message - Confirmation message
+     * @param {string} filePath - File path for context
+     * @returns {string} Confirmation dialog HTML
+     */
+    confirmationDialog: (title, message, filePath) => `
+        <div class="text-center py-3">
+            <i class="bi bi-exclamation-triangle text-warning fs-1 mb-3"></i>
+            <h5>${title}</h5>
+            <p class="text-muted mb-3">${message}</p>
+            <p class="small text-muted"><strong>File:</strong> ${filePath}</p>
+        </div>
+    `,
+
+    /**
+     * Info alert template for modal content
+     * @param {string} message - Info message to display
+     * @param {string} icon - Bootstrap icon class (default: 'info-circle')
+     * @returns {string} Info alert HTML
+     */
+    infoAlert: (message, icon = 'info-circle') => `
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-${icon}"></i> 
+            ${message}
+        </div>
+    `,
+
+    /**
+     * Configuration tab structure
+     * @param {Array<string>} tabTypes - Array of tab types
+     * @param {Function} contentGenerator - Function to generate tab content
+     * @returns {string} Tabbed interface HTML
+     */
+    configurationTabs: (tabTypes, contentGenerator) => {
+        const tabHeaders = tabTypes.map((type, index) => `
+            <li class="nav-item" role="presentation">
+                <button class="nav-link ${index === 0 ? 'active' : ''}" 
+                    id="${type.toLowerCase()}-tab" 
+                    data-bs-toggle="tab" 
+                    data-bs-target="#${type.toLowerCase()}-pane" 
+                    type="button" 
+                    role="tab" 
+                    aria-controls="${type.toLowerCase()}-pane" 
+                    aria-selected="${index === 0 ? 'true' : 'false'}">
+                    ${type}
+                </button>
+            </li>
+        `).join('');
+
+        const tabContent = tabTypes.map((type, index) => `
+            <div class="tab-pane fade ${index === 0 ? 'show active' : ''}" 
+                id="${type.toLowerCase()}-pane" 
+                role="tabpanel" 
+                aria-labelledby="${type.toLowerCase()}-tab" 
+                tabindex="0">
+                ${contentGenerator(type)}
+            </div>
+        `).join('');
+
+        return `
+            <ul class="nav nav-tabs" id="configTabs" role="tablist">
+                ${tabHeaders}
+            </ul>
+            <div class="tab-content mt-3" id="configTabContent">
+                ${tabContent}
+            </div>
+        `;
+    }
+};
+
+/**
+ * Form generation utilities for creating dynamic forms
+ * @namespace FORM_UTILS
+ */
+export const FORM_UTILS = {
+    /**
+     * Generates input HTML based on field type
+     * @param {Object} field - Field configuration
+     * @param {string} value - Current field value
+     * @param {string} prefix - ID prefix for form fields
+     * @returns {string} Input HTML
+     */
+    generateInput: (field, value = '', prefix = '') => {
+        const fieldId = prefix ? `${prefix}_${field.id}` : field.id;
+        const attributes = field.required ? 'required' : '';
+        
+        switch (field.type) {
+            case 'concept':
+                return `<input type="text" class="form-control" id="${fieldId}" value="${value}" readonly>`;
+                
+            case 'reference':
+                // This should use the existing createReferenceDropdown function
+                return `<select class="form-select" id="${fieldId}" ${attributes}></select>`;
+                
+            case 'array':
+                return `
+                    <textarea class="form-control" id="${fieldId}" rows="3" ${attributes}>${Array.isArray(value) ? value.join(', ') : value}</textarea>
+                    <div class="form-text">Enter multiple values separated by commas</div>
+                `;
+                
+            case 'textarea':
+                return `<textarea class="form-control" id="${fieldId}" rows="3" ${attributes}>${value}</textarea>`;
+                
+            case 'checkbox':
+                return `
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="${fieldId}" ${value ? 'checked' : ''} ${attributes}>
+                        <label class="form-check-label" for="${fieldId}">${field.label}</label>
+                    </div>
+                `;
+                
+            case 'select':
+                const options = field.options || [];
+                return `
+                    <select class="form-select" id="${fieldId}" ${attributes}>
+                        ${options.map(option => `
+                            <option value="${option.value}" ${option.value === value ? 'selected' : ''}>${option.label}</option>
+                        `).join('')}
+                    </select>
+                `;
+                
+            default:
+                return `<input type="${field.type}" class="form-control" id="${fieldId}" value="${value}" ${attributes}>`;
+        }
+    },
+
+    /**
+     * Generates a complete form field with label and input
+     * @param {Object} field - Field configuration
+     * @param {string} value - Current field value
+     * @param {string} mode - 'edit' or 'add' mode
+     * @returns {string} Complete form field HTML
+     */
+    generateFormField: (field, value = '', mode = 'add') => {
+        const inputHTML = FORM_UTILS.generateInput(field, value, mode === 'edit' ? 'edit' : '');
+        
+        if (mode === 'edit') {
+            return MODAL_TEMPLATES.editFormField(field, inputHTML);
+        } else {
+            return MODAL_TEMPLATES.formFieldRow(field, inputHTML);
+        }
+    },
+
+    /**
+     * Generates configuration table row for field editing
+     * @param {Object} field - Field configuration
+     * @param {Array<string>} conceptTypes - Available concept types for references
+     * @returns {string} Table row HTML
+     */
+    generateConfigRow: (field, conceptTypes) => `
+        <tr>
+            <td><input type="text" class="form-control form-control-sm field-id" value="${field.id || ''}"></td>
+            <td><input type="text" class="form-control form-control-sm field-label" value="${field.label || ''}"></td>
+            <td>
+                <select class="form-select form-select-sm field-type">
+                    <option value="text" ${field.type === 'text' ? 'selected' : ''}>text</option>
+                    <option value="concept" ${field.type === 'concept' ? 'selected' : ''}>concept</option>
+                    <option value="reference" ${field.type === 'reference' ? 'selected' : ''}>reference</option>
+                    <option value="array" ${field.type === 'array' ? 'selected' : ''}>array</option>
+                    <option value="textarea" ${field.type === 'textarea' ? 'selected' : ''}>textarea</option>
+                </select>
+            </td>
+            <td>
+                <div class="form-check">
+                    <input class="form-check-input field-required" type="checkbox" ${field.required ? 'checked' : ''}>
+                </div>
+            </td>
+            <td>
+                <select class="form-select form-select-sm field-reference-type" ${field.type !== 'reference' ? 'disabled' : ''}>
+                    <option value="">None</option>
+                    ${conceptTypes.map(type => `
+                        <option value="${type}" ${field.referencesType === type ? 'selected' : ''}>${type}</option>
+                    `).join('')}
+                </select>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-outline-danger delete-field-btn">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `,
+
+    /**
+     * Generates configuration table structure
+     * @param {string} conceptType - Type of concept
+     * @param {Array<Object>} fields - Array of field configurations
+     * @param {Array<string>} conceptTypes - Available concept types
+     * @returns {string} Configuration table HTML
+     */
+    generateConfigTable: (conceptType, fields, conceptTypes) => `
+        <div class="mb-3">
+            <h6>${conceptType} Fields</h6>
+            <table class="table table-bordered table-sm">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Label</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Reference Type</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="${conceptType.toLowerCase()}-fields">
+                    ${fields.map(field => FORM_UTILS.generateConfigRow(field, conceptTypes)).join('')}
+                </tbody>
+            </table>
+            <button class="btn btn-sm btn-outline-primary add-field-btn" data-type="${conceptType}">
+                <i class="bi bi-plus-circle"></i> Add Field
+            </button>
         </div>
     `
 };

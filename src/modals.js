@@ -1,180 +1,345 @@
-import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, validateFormFields } from './common.js';
+/**
+ * Modal Management Module
+ * 
+ * @module modals
+ * @description Provides modal dialog functionality for concept management, file operations,
+ * configuration settings, and repository interactions. All modals share common utilities
+ * and consistent error handling patterns.
+ * 
+ * @requires common - Utility functions and state management
+ * @requires api - GitHub API interaction functions
+ * @requires homepage - Homepage rendering and refresh functions
+ * @requires config - Modal configuration constants
+ */
+
+import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, validateFormFields, showUserNotification } from './common.js';
 import { addFile, deleteFile, addFolder, getConcept, getFiles, updateFile } from './api.js';
 import { refreshHomePage } from './homepage.js';
+import { MODAL_CONFIG } from '../config.js';
+import { MODAL_TEMPLATES, FORM_UTILS } from './templates.js';
 
-export const renderAddModal = async () => {
-
-    console.log(appState.getState());
-    const modal = document.getElementById('modal');
-    const modalHeader = modal.querySelector('.modal-header');
-    const modalBody = modal.querySelector('.modal-body');
-    const modalFooter = modal.querySelector('.modal-footer');
-
-    const concept = await getConcept();
-    console.log(concept);
-
-    modalHeader.innerHTML = `
-        <h5 class="modal-title">Add Concept</h5>
-    `;
-
-    // Add the concept type selector
-    modalBody.innerHTML = `
-        <div class="row mb-3">
-            <div class="col-4">
-                <label for="conceptType" class="col-form-label">Concept Type</label>
-            </div>
-            <div class="col-8">
-                <select class="form-select" id="conceptType">
-                    <option value="PRIMARY" selected>PRIMARY</option>
-                    <option value="SECONDARY">SECONDARY</option>
-                    <option value="SOURCE">SOURCE</option>
-                    <option value="QUESTION">QUESTION</option>
-                    <option value="RESPONSE">RESPONSE</option>
-                </select>
-            </div>
-        </div>
-        <div id="templateFields"></div>
-        <div id="additionalFields"></div>
-    `;
-
-    // Update the modal footer with the Add Field button on the left and Cancel/Save on the right
-    modalFooter.innerHTML = `
-        <div class="w-100 d-flex justify-content-between">
-            <div>
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-outline-success">Save</button>
-            </div>
-        </div>
-    `;
-
-    // Function to render template fields based on selected type
-    const renderTemplateFields = (type) => {
-        const templateFields = document.getElementById('templateFields');
-        templateFields.innerHTML = '';
-
-        const conceptTemplates = appState.getState().config;
-        
-        conceptTemplates[type].forEach(field => {
-            const fieldRow = document.createElement('div');
-            fieldRow.classList.add('row', 'mb-3');
-
-            let fieldHTML;
-
-            switch (field.type) {
-                case 'concept':
-                    fieldHTML = `
-                        <input type="text" class="form-control" id="${field.id}" value="${concept}" readonly>
-                    `;
-                    break;
-                case 'reference':
-                    fieldHTML = createReferenceDropdown(field);
-                    break;
-                default:
-                    fieldHTML = `<input type="${field.type}" class="form-control" id="${field.id}">`;
-            }
-
-            fieldRow.innerHTML = `
-                <div class="col-4">
-                    <label for="${field.id}" class="col-form-label">${field.label}</label>
-                </div>
-                <div class="col-8">
-                    ${fieldHTML}
-                </div>
-            `;
-            
-            templateFields.appendChild(fieldRow);
-        });
-    };
-
-    new bootstrap.Modal(modal).show();
-
-    // Render the default template (PRIMARY)
-    renderTemplateFields('PRIMARY');
-    
-    // Add event listener for type change
-    document.getElementById('conceptType').addEventListener('change', (e) => {
-        renderTemplateFields(e.target.value);
-
-        if (e.target.value === 'QUESTION') {
-            setTimeout(setupResponseMultiSelect, 100);
+/**
+ * Common modal utilities for consistent modal management
+ */
+const ModalUtils = {
+    /**
+     * Gets modal elements and validates they exist
+     * @function getModalElements
+     * @returns {Object} Object containing modal, header, body, and footer elements
+     * @throws {Error} Throws error if modal elements are not found
+     */
+    getModalElements() {
+        const modal = document.querySelector(MODAL_CONFIG.MODAL_SELECTOR);
+        if (!modal) {
+            throw new Error(`Modal element ${MODAL_CONFIG.MODAL_SELECTOR} not found`);
         }
-    });
+        
+        return {
+            modal,
+            header: modal.querySelector('.modal-header'),
+            body: modal.querySelector('.modal-body'),
+            footer: modal.querySelector('.modal-footer')
+        };
+    },
 
-    // Add event listener for the Save button
-    const confirmButton = modal.querySelector('.btn-outline-success');
-    confirmButton.addEventListener('click', async () => {
-        // Collect all the fields into a payload object
-        const payload = {
-            'object_type': document.getElementById('conceptType').value,
+    /**
+     * Sets up basic modal structure with title
+     * @function setupModal
+     * @param {string} title - Modal title text
+     * @returns {Object} Object containing modal elements
+     * @throws {Error} Throws error if modal setup fails
+     */
+    setupModal(title) {
+        const elements = this.getModalElements();
+        
+        elements.header.innerHTML = `<h5 class="modal-title">${title}</h5>`;
+        elements.body.innerHTML = '';
+        elements.footer.innerHTML = '';
+        
+        return elements;
+    },
+
+    /**
+     * Shows the modal with Bootstrap modal component
+     * @function showModal
+     * @param {HTMLElement} modal - Modal element to show
+     * @returns {bootstrap.Modal} Bootstrap modal instance
+     */
+    showModal(modal) {
+        return new bootstrap.Modal(modal).show();
+    },
+
+    /**
+     * Hides the modal and cleans up Bootstrap modal instance
+     * @function hideModal
+     * @param {HTMLElement} modal - Modal element to hide
+     */
+    hideModal(modal) {
+        const modalInstance = bootstrap.Modal.getInstance(modal);
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+    },
+
+    /**
+     * Creates standard modal footer with buttons
+     * @function createFooter
+     * @param {Array} buttons - Array of button configurations
+     * @returns {string} HTML string for modal footer
+     */
+    createFooter(buttons) {
+        const buttonElements = buttons.map(btn => 
+            `<button type="button" class="btn ${btn.class}" ${btn.attributes || ''}>${btn.text}</button>`
+        ).join('');
+        
+        return `<div class="w-100 d-flex justify-content-between">
+            <div></div>
+            <div>${buttonElements}</div>
+        </div>`;
+    },
+
+    /**
+     * Handles modal errors with user feedback
+     * @function handleModalError
+     * @param {Error} error - Error object
+     * @param {string} operation - Description of failed operation
+     * @param {HTMLElement} modal - Modal element for cleanup
+     */
+    handleModalError(error, operation, modal) {
+        console.error(`${operation} failed:`, error);
+        showUserNotification('error', `${operation} failed: ${error.message}`);
+        hideAnimation();
+        
+        if (modal) {
+            this.hideModal(modal);
+        }
+    },
+
+    /**
+     * Validates form fields and shows user feedback
+     * @function validateFormField
+     * @param {string} fieldId - ID of field to validate
+     * @param {*} value - Value to validate
+     * @param {string} errorMessage - Error message to show
+     * @returns {boolean} True if valid, false if invalid
+     */
+    validateFormField(fieldId, value, errorMessage) {
+        const fieldElement = document.getElementById(fieldId);
+        if (!fieldElement) return false;
+        
+        const isValid = value && value.toString().trim() !== '';
+        
+        if (!isValid) {
+            fieldElement.classList.add('is-invalid');
+            let errorElement = document.getElementById(`${fieldId}-error`);
+            
+            if (!errorElement) {
+                errorElement = document.createElement('div');
+                errorElement.id = `${fieldId}-error`;
+                errorElement.className = 'invalid-feedback';
+                fieldElement.parentNode.appendChild(errorElement);
+            }
+            
+            errorElement.textContent = errorMessage;
+            fieldElement.focus();
+        } else {
+            fieldElement.classList.remove('is-invalid');
+        }
+        
+        return isValid;
+    },
+
+    /**
+     * Creates a loading state for modal operations
+     * @function showLoadingState
+     * @param {HTMLElement} button - Button element to show loading state
+     * @param {string} loadingText - Text to show during loading
+     */
+    showLoadingState(button, loadingText = 'Processing...') {
+        if (!button) return;
+        
+        button.disabled = true;
+        button.originalText = button.textContent;
+        button.innerHTML = `
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+            ${loadingText}
+        `;
+    },
+
+    /**
+     * Restores button from loading state
+     * @function hideLoadingState
+     * @param {HTMLElement} button - Button element to restore
+     */
+    hideLoadingState(button) {
+        if (!button || !button.originalText) return;
+        
+        button.disabled = false;
+        button.textContent = button.originalText;
+        delete button.originalText;
+    }
+};
+
+/**
+ * Renders a modal for adding new concepts with dynamic form fields based on concept type
+ * 
+ * @async
+ * @function renderAddModal
+ * 
+ * @returns {Promise<void>} Resolves when modal is rendered and event listeners are attached
+ * @throws {Error} Throws error if concept retrieval, modal setup, or form validation fails
+ */
+export const renderAddModal = async () => {
+    try {
+        console.log(appState.getState());
+        const { modal, header, body, footer } = ModalUtils.setupModal('Add Concept');
+
+        const concept = await getConcept();
+
+        // Use template for concept type selector and form containers
+        body.innerHTML = `
+            ${MODAL_TEMPLATES.conceptTypeSelector(MODAL_CONFIG.CONCEPT_TYPES)}
+            ${MODAL_TEMPLATES.dynamicFieldContainers()}
+        `;
+
+        // Use template for modal footer
+        footer.innerHTML = MODAL_TEMPLATES.footer([
+            { text: 'Cancel', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' },
+            { text: 'Save', class: MODAL_CONFIG.MODAL_CLASSES.SUCCESS }
+        ]);
+
+        // Function to render template fields based on selected type
+        const renderTemplateFields = (type) => {
+            const templateFields = document.getElementById('templateFields');
+            templateFields.innerHTML = '';
+
+            const conceptTemplates = appState.getState().config;
+            
+            conceptTemplates[type].forEach(field => {
+                const fieldRow = document.createElement('div');
+                fieldRow.classList.add('row', 'mb-3');
+
+                let fieldHTML;
+
+                switch (field.type) {
+                    case 'concept':
+                        fieldHTML = `
+                            <input type="text" class="form-control" id="${field.id}" value="${concept}" readonly>
+                        `;
+                        break;
+                    case 'reference':
+                        fieldHTML = createReferenceDropdown(field);
+                        break;
+                    default:
+                        fieldHTML = `<input type="${field.type}" class="form-control" id="${field.id}">`;
+                }
+
+                fieldRow.innerHTML = `
+                    <div class="col-4">
+                        <label for="${field.id}" class="col-form-label">${field.label}</label>
+                    </div>
+                    <div class="col-8">
+                        ${fieldHTML}
+                    </div>
+                `;
+                
+                templateFields.appendChild(fieldRow);
+            });
         };
 
-        // Get Concept ID and Key
-        const conceptId = document.getElementById('conceptId').value.trim();
-        const key = document.getElementById('key').value.trim();
-        const keyInput = document.getElementById('key');
+        // Show the modal
+        ModalUtils.showModal(modal);
 
-        // Validate required fields
-        if (!conceptId || !key) {
-            alert('Concept ID and Key are required.');
-            return;
-        }
-
-        const { index } = appState.getState();
-        const existingKeys = Object.values(index);
-        const keyExists = existingKeys.some(existingKey => 
-            existingKey.toLowerCase() === key.toLowerCase()
-        );
-
-        if (keyExists) {
-            keyInput.classList.add('is-invalid');
-            let errorMessage = document.getElementById('key-error');
-            if (!errorMessage) {
-                errorMessage = document.createElement('div');
-                errorMessage.id = 'key-error';
-                errorMessage.className = 'invalid-feedback';
-                keyInput.parentNode.appendChild(errorMessage);
-            }
-            errorMessage.textContent = 'This key already exists. Please use a unique key.';
+        // Render the default template (PRIMARY)
+        renderTemplateFields('PRIMARY');
         
-            keyInput.focus();
-            return;
-        }
+        // Add event listener for type change
+        document.getElementById('conceptType').addEventListener('change', (e) => {
+            renderTemplateFields(e.target.value);
 
-        keyInput.classList.remove('is-invalid');
+            if (e.target.value === 'QUESTION') {
+                setTimeout(setupResponseMultiSelect, 100);
+            }
+        });
 
-        payload['conceptId'] = conceptId;
-        payload['key'] = key;
+        // Add event listener for the Save button
+        const confirmButton = modal.querySelector('.btn-outline-success');
+        confirmButton.addEventListener('click', async () => {
+            // Collect all the fields into a payload object
+            const payload = {
+                'object_type': document.getElementById('conceptType').value,
+            };
 
-        const conceptTemplates = appState.getState().config;
-        const validForm = validateFormFields(payload, conceptTemplates[document.getElementById('conceptType').value]);
+            // Get Concept ID and Key
+            const conceptId = document.getElementById('conceptId').value.trim();
+            const key = document.getElementById('key').value.trim();
+            const keyInput = document.getElementById('key');
 
-        if (!validForm) {
-            alert('Please fill in all required fields.');
-            return;
-        }
+            // Validate required fields
+            if (!conceptId || !key) {
+                alert('Concept ID and Key are required.');
+                return;
+            }
 
-        // Prepare the file path and content
-        const path = `${conceptId}.json`;
-        const content = JSON.stringify(payload, null, 2); // Pretty-print JSON with indentation
+            const { index } = appState.getState();
+            const existingKeys = Object.values(index);
+            const keyExists = existingKeys.some(existingKey => 
+                existingKey.toLowerCase() === key.toLowerCase()
+            );
 
-        // Show loading animation (assuming this function exists)
-        showAnimation();
+            if (keyExists) {
+                keyInput.classList.add('is-invalid');
+                let errorMessage = document.getElementById('key-error');
+                if (!errorMessage) {
+                    errorMessage = document.createElement('div');
+                    errorMessage.id = 'key-error';
+                    errorMessage.className = 'invalid-feedback';
+                    keyInput.parentNode.appendChild(errorMessage);
+                }
+                errorMessage.textContent = 'This key already exists. Please use a unique key.';
+            
+                keyInput.focus();
+                return;
+            }
 
-        // Add the file (assuming addFile is defined elsewhere)
-        try {
-            await addFile(path, content);
-            // Hide the modal
-            bootstrap.Modal.getInstance(modal).hide();
-            // Refresh the home page (assuming renderHomePage is defined elsewhere)
-            refreshHomePage();
+            keyInput.classList.remove('is-invalid');
+
+            payload['conceptId'] = conceptId;
+            payload['key'] = key;
+
+            const conceptTemplates = appState.getState().config;
+            const validForm = validateFormFields(payload, conceptTemplates[document.getElementById('conceptType').value]);
+
+            if (!validForm) {
+                alert('Please fill in all required fields.');
+                return;
+            }
+
+            // Prepare the file path and content
+            const path = `${conceptId}.json`;
+            const content = JSON.stringify(payload, null, 2); // Pretty-print JSON with indentation
+
+            // Show loading animation (assuming this function exists)
+            showAnimation();
+
+            // Add the file (assuming addFile is defined elsewhere)
+            try {
+                await addFile(path, content);
+                // Hide the modal
+                bootstrap.Modal.getInstance(modal).hide();
+                // Refresh the home page (assuming renderHomePage is defined elsewhere)
+                refreshHomePage();
+            } catch (error) {
+                console.error('Error adding file:', error);
+                alert('An error occurred while saving the concept.');
+            } finally {
+                // Hide loading animation
+                hideAnimation();
+            }
+        });
         } catch (error) {
-            console.error('Error adding file:', error);
-            alert('An error occurred while saving the concept.');
-        } finally {
-            // Hide loading animation
-            hideAnimation();
+            ModalUtils.handleModalError(error, 'Add concept modal setup', modal);
         }
-    });
 }
 
 const setupResponseMultiSelect = () => {
@@ -228,29 +393,31 @@ const setupResponseMultiSelect = () => {
     });
 }
 
+/**
+ * Renders a confirmation modal for deleting files from the repository
+ * 
+ * @function renderDeleteModal
+ * 
+ * @param {Event} event - Click event from delete button containing file metadata
+ * @throws {Error} Throws error if file deletion fails or modal setup fails
+ */
 export const renderDeleteModal = (event) => {
-    const button = event.target;
-    const file = button.getAttribute('data-bs-file');
+    try {
+        const button = event.target;
+        const file = button.getAttribute('data-bs-file');
 
-    const modal = document.getElementById('modal');
-    const modalHeader = modal.querySelector('.modal-header');
-    const modalBody = modal.querySelector('.modal-body');
-    const modalFooter = modal.querySelector('.modal-footer');
+        const { modal, header, body, footer } = ModalUtils.setupModal('Delete File');
 
-    modalHeader.innerHTML = `
-        <h5 class="modal-title">Delete File</h5>
-    `;
+        // Use template for confirmation dialog
+        body.innerHTML = MODAL_TEMPLATES.confirmationDialog('Are you sure you want to delete', file);
 
-    modalBody.innerHTML = `
-        <p>Are you sure you want to delete <strong>${file}?</strong></p>
-    `;
+        // Use template for modal footer
+        footer.innerHTML = MODAL_TEMPLATES.footer([
+            { text: 'Cancel', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' },
+            { text: 'Confirm', class: MODAL_CONFIG.MODAL_CLASSES.DANGER }
+        ]);
 
-    modalFooter.innerHTML = `
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-outline-danger">Confirm</button>
-    `;
-
-    new bootstrap.Modal(modal).show();
+        ModalUtils.showModal(modal);
 
     // add event listener for confirm button
     const confirmButton = modal.querySelector('.btn-outline-danger');
@@ -266,19 +433,29 @@ export const renderDeleteModal = (event) => {
         refreshHomePage();
         hideAnimation();
     });
+    } catch (error) {
+        ModalUtils.handleModalError(error, 'Delete confirmation modal', modal);
+    }
 }
 
+/**
+ * Renders a modal for viewing and editing concept files with dynamic field rendering
+ * 
+ * @async
+ * @function renderViewModal
+ * 
+ * @param {Event} event - Click event from view button containing file metadata
+ * @returns {Promise<void>} Resolves when modal is rendered with concept data
+ * @throws {Error} Throws error if file retrieval, parsing, or modal rendering fails
+ */
 export const renderViewModal = async (event) => {
     showAnimation();
     
-    const button = event.target;
-    const file = button.getAttribute('data-bs-file');
-    const modal = document.getElementById('modal');
-    const modalHeader = modal.querySelector('.modal-header');
-    const modalBody = modal.querySelector('.modal-body');
-    const modalFooter = modal.querySelector('.modal-footer');
-    
     try {
+        const button = event.target;
+        const file = button.getAttribute('data-bs-file');
+        const { modal, header, body, footer } = ModalUtils.getModalElements();
+        
         const { content } = await getFileContent(file);
         
         // Validate that we have content and it's a proper concept
@@ -297,7 +474,7 @@ export const renderViewModal = async (event) => {
 
         const renderModalContent = () => {
             // Render header with badge showing concept type
-            modalHeader.innerHTML = `
+            header.innerHTML = `
                 <h5 class="modal-title d-flex align-items-center">
                     ${modal.isEditMode ? 'Edit' : 'View'} Concept 
                     <span class="badge bg-primary ms-2">${conceptType}</span>
@@ -305,7 +482,7 @@ export const renderViewModal = async (event) => {
             `;
 
             // Clear modal body
-            modalBody.innerHTML = '';
+            body.innerHTML = '';
             
             // Create container for concept content
             const contentContainer = document.createElement('div');
@@ -320,16 +497,14 @@ export const renderViewModal = async (event) => {
             }
             
             // Add the container to the modal body
-            modalBody.appendChild(contentContainer);
+            body.appendChild(contentContainer);
             
             // Set up footer buttons based on mode
             if (modal.isEditMode) {
-                modalFooter.innerHTML = `
-                    <div class="w-100 d-flex justify-content-between">
-                        <button type="button" id="cancelButton" class="btn btn-outline-secondary">Cancel</button>
-                        <button type="button" id="saveButton" class="btn btn-outline-success">Save Changes</button>
-                    </div>
-                `;
+                footer.innerHTML = MODAL_TEMPLATES.footer([
+                    { text: 'Cancel', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'id="cancelButton"' },
+                    { text: 'Save Changes', class: MODAL_CONFIG.MODAL_CLASSES.SUCCESS, attributes: 'id="saveButton"' }
+                ]);
                 
                 // Add event listeners for edit mode
                 document.getElementById('cancelButton').addEventListener('click', () => {
@@ -343,12 +518,10 @@ export const renderViewModal = async (event) => {
                     await saveEditedConcept(content, typeConfig, file);
                 });
             } else {
-                modalFooter.innerHTML = `
-                    <div class="w-100 d-flex justify-content-between">
-                        <button type="button" id="closeButton" class="btn btn-outline-secondary">Close</button>
-                        <button type="button" id="editButton" class="btn btn-outline-primary" disabled>Edit</button>
-                    </div>
-                `;
+                footer.innerHTML = MODAL_TEMPLATES.footer([
+                    { text: 'Close', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'id="closeButton"' },
+                    { text: 'Edit', class: MODAL_CONFIG.MODAL_CLASSES.PRIMARY, attributes: 'id="editButton" disabled' }
+                ]);
                 
                 // Add event listeners for view mode
                 document.getElementById('closeButton').addEventListener('click', () => {
@@ -374,26 +547,30 @@ export const renderViewModal = async (event) => {
     } catch (error) {
         console.error('Error fetching file:', error);
         
-        // Show user-friendly error message
-        modalBody.innerHTML = `
-            <div class="alert alert-danger">
-                <h6><i class="bi bi-exclamation-triangle"></i> Error Loading Concept</h6>
-                <p>${error.message}</p>
-                <small class="text-muted">File: ${file}</small>
-            </div>
-        `;
+        // Show user-friendly error message using template
+        body.innerHTML = MODAL_TEMPLATES.errorAlert('Error Loading Concept', error.message, `File: ${file}`);
+
+        footer.innerHTML = MODAL_TEMPLATES.footer([
+            { text: 'Close', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'onclick="bootstrap.Modal.getInstance(this.closest(\'.modal\')).hide()"' }
+        ]);        
         
-        modalFooter.innerHTML = `
-            <button type="button" class="btn btn-outline-secondary" onclick="bootstrap.Modal.getInstance(this.closest('.modal')).hide()">Close</button>
-        `;
-        
-        new bootstrap.Modal(modal).show();
+        ModalUtils.showModal(modal);
     } finally {
         hideAnimation();
     }
 }
 
-// Function to render view mode (only fields with values)
+/**
+ * Renders view mode display for concept data with organized field sections
+ * 
+ * @function renderViewMode
+ * 
+ * @param {HTMLElement} container - Container element to render content into
+ * @param {Object} content - Concept data to display
+ * @param {Array<Object>} typeConfig - Field configuration for proper rendering
+ * @returns {void}
+ * @throws {Error} Throws error if rendering fails
+ */
 function renderViewMode(container, content, typeConfig) {
     // Add styling for view mode
     container.innerHTML = `
@@ -531,13 +708,20 @@ function renderViewMode(container, content, typeConfig) {
     }
 }
 
-// Function to render edit mode (all configured fields)
+/**
+ * Renders edit mode form for concept data with all configured fields
+ * 
+ * @function renderEditMode
+ * 
+ * @param {HTMLElement} container - Container element to render form into
+ * @param {Object} content - Current concept data for pre-population
+ * @param {Array<Object>} typeConfig - Field configuration for form generation
+ * @returns {void}
+ * @throws {Error} Throws error if form rendering fails
+ */
 function renderEditMode(container, content, typeConfig) {
     container.innerHTML = `
-        <div class="alert alert-info mb-3">
-            <i class="bi bi-info-circle"></i> 
-            Editing concept. All configured fields are shown below.
-        </div>
+        ${MODAL_TEMPLATES.infoAlert('Editing concept. All configured fields are shown below.')}
         <form id="editConceptForm">
             <div class="edit-fields"></div>
         </form>
@@ -545,74 +729,49 @@ function renderEditMode(container, content, typeConfig) {
     
     const editFields = container.querySelector('.edit-fields');
     
-    // Render all configured fields, regardless of whether they have values
+    // Render all configured fields using form utilities
     typeConfig.forEach(field => {
         const fieldValue = content[field.id] !== undefined ? content[field.id] : '';
-        const fieldRow = document.createElement('div');
-        fieldRow.className = 'mb-3';
         
-        let fieldInput;
-        
-        // Create appropriate input based on field type
-        switch (field.type) {
-            case 'concept':
-                // Concept ID is read-only
-                fieldInput = `
-                    <input type="text" class="form-control" id="edit_${field.id}" 
-                           value="${fieldValue}" ${field.id === 'conceptId' ? 'readonly' : ''}>
-                `;
-                break;
-                
-            case 'reference':
-                // Reference fields use the existing dropdown function
-                fieldInput = createReferenceDropdown(field);
-                // We'll need to set the selected value after rendering
+        // Handle reference fields specially (still need createReferenceDropdown)
+        if (field.type === 'reference') {
+            const fieldRow = document.createElement('div');
+            fieldRow.innerHTML = FORM_UTILS.generateFormField(field, fieldValue, 'edit');
+            
+            // Replace the select with reference dropdown
+            const selectElement = fieldRow.querySelector('select');
+            if (selectElement) {
+                selectElement.outerHTML = createReferenceDropdown(field);
+                // Set the selected value after rendering
                 setTimeout(() => {
-                    const selectElement = document.getElementById(`edit_${field.id}`);
-                    if (selectElement) {
-                        selectElement.value = fieldValue;
+                    const newSelectElement = document.getElementById(`edit_${field.id}`);
+                    if (newSelectElement) {
+                        newSelectElement.value = fieldValue;
                     }
                 }, 0);
-                break;
-                
-            case 'array':
-                if (Array.isArray(fieldValue)) {
-                    fieldInput = `
-                        <textarea class="form-control" id="edit_${field.id}" rows="3">${fieldValue.join(', ')}</textarea>
-                        <div class="form-text">Enter multiple values separated by commas</div>
-                    `;
-                } else {
-                    fieldInput = `
-                        <textarea class="form-control" id="edit_${field.id}" rows="3">${fieldValue}</textarea>
-                        <div class="form-text">Enter multiple values separated by commas</div>
-                    `;
-                }
-                break;
-                
-            case 'textarea':
-                fieldInput = `
-                    <textarea class="form-control" id="edit_${field.id}" rows="3">${fieldValue}</textarea>
-                `;
-                break;
-                
-            default:
-                fieldInput = `
-                    <input type="${field.type}" class="form-control" id="edit_${field.id}" 
-                           value="${fieldValue}" ${field.required ? 'required' : ''}>
-                `;
+            }
+            editFields.appendChild(fieldRow);
+        } else {
+            // Use form utility for other field types
+            const fieldHTML = FORM_UTILS.generateFormField(field, fieldValue, 'edit');
+            const fieldRow = document.createElement('div');
+            fieldRow.innerHTML = fieldHTML;
+            editFields.appendChild(fieldRow);
         }
-        
-        fieldRow.innerHTML = `
-            <label for="edit_${field.id}" class="form-label">
-                ${field.label} ${field.required ? '<span class="text-danger">*</span>' : ''}
-            </label>
-            ${fieldInput}
-        `;
-        
-        editFields.appendChild(fieldRow);
     });
 }
 
+/**
+ * Creates a formatted row for displaying field data in view mode
+ * 
+ * @function createFieldRow
+ * 
+ * @param {string} key - Field name/label
+ * @param {*} value - Field value to display
+ * @param {Object|null} fieldConfig - Optional field configuration for type-specific formatting
+ * @returns {HTMLElement} DOM element containing the formatted field row
+ * @throws {Error} Throws error if row creation fails
+ */
 function createFieldRow(key, value, fieldConfig = null) {
     const row = document.createElement('div');
     row.classList.add('row', 'mb-3', 'align-items-center');
@@ -660,108 +819,97 @@ function createFieldRow(key, value, fieldConfig = null) {
     return row;
 }
 
+/**
+ * Renders a modal showing file upload progress with real-time status updates
+ * 
+ * @async
+ * @function renderUploadModal
+ * 
+ * @param {Array<Object>} files - Array of file objects with name and content properties
+ * @returns {Promise<void>} Resolves when all uploads are complete and modal is shown
+ * @throws {Error} Throws error if modal setup or file upload fails
+ */
 export const renderUploadModal = async (files) => {
-
-    // Get the modal element
-    const modal = document.getElementById('modal');
-    const modalHeader = modal.querySelector('.modal-header');
-    const modalBody = modal.querySelector('.modal-body');
-    const modalFooter = modal.querySelector('.modal-footer');
-
-    // Set modal title
-    modalHeader.innerHTML = `
-        <h5 class="modal-title">Uploading Files</h5>
-    `;
-
-    // Clear previous content
-    modalBody.innerHTML = '';
-
-    // Array to hold file rows for status updates
-    const fileRows = [];
-
-    // Create file rows in the modal body
-    files.forEach((file) => {
-        const fileRow = document.createElement('div');
-        fileRow.classList.add('d-flex', 'align-items-center', 'mb-2');
-        fileRow.innerHTML = `
-            <div class="flex-grow-1">${file.name}</div>
-            <div class="status-indicator">
-            <span class="status-text ms-1">Pending...</span>
-            </div>
-        `;
-        
-        modalBody.appendChild(fileRow);
-        fileRows.push({ file, fileRow });
-    });
-
-    // Modal footer
-    modalFooter.innerHTML = `
-        <button type="button" class="btn btn-outline-secondary">Close</button>
-    `;
-
-    // Show the modal
-    new bootstrap.Modal(modal).show();
-
-    // Upload files sequentially
-    for (const { file, fileRow } of fileRows) {
-        // Update status to "Processing..."
-        const statusIndicator = fileRow.querySelector('.status-indicator');
-        statusIndicator.innerHTML = `
-            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            <span class="status-text ms-1">Processing...</span>
-        `;
-
-        try {
-            await addFile(file.name, file.content);
-            // On success, update the status indicator
-            statusIndicator.innerHTML = '<span class="text-success">Uploaded successfully</span>';
-        } catch (error) {
-            // On failure, update the status indicator
-            statusIndicator.innerHTML = '<span class="text-danger">Upload failed</span>';
-            console.error(`Failed to upload ${file.name}:`, error);
+    try {
+        // Validate input
+        if (!Array.isArray(files) || files.length === 0) {
+            throw new Error('No files provided for upload');
         }
+
+        const { modal, header, body, footer } = ModalUtils.setupModal('Uploading Files');
+
+        // Clear previous content  
+        body.innerHTML = '';
+
+        // Array to hold file rows for status updates
+        const fileRows = [];
+
+        // Create file rows in the modal body using templates
+        files.forEach((file) => {
+            const fileRow = document.createElement('div');
+            fileRow.innerHTML = MODAL_TEMPLATES.uploadProgressItem(file.name);
+            body.appendChild(fileRow);
+            fileRows.push({ file, fileRow });
+        });
+
+        // Modal footer using template
+        footer.innerHTML = MODAL_TEMPLATES.footer([
+            { text: 'Close', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY }
+        ]);
+
+        // Show the modal
+        ModalUtils.showModal(modal);
+
+        // Upload files sequentially
+        for (const { file, fileRow } of fileRows) {
+            // Update status to "Processing..." using template
+            const statusIndicator = fileRow.querySelector('.status-indicator');
+            statusIndicator.innerHTML = MODAL_TEMPLATES.uploadStatus.processing();
+
+            try {
+                await addFile(file.name, file.content);
+                // On success, update the status indicator using template
+                statusIndicator.innerHTML = MODAL_TEMPLATES.uploadStatus.success();
+            } catch (error) {
+                // On failure, update the status indicator using template
+                statusIndicator.innerHTML = MODAL_TEMPLATES.uploadStatus.failed();
+                console.error(`Failed to upload ${file.name}:`, error);
+            }
+        }
+
+        // add event listener for save button
+        const closeButton = modal.querySelector('.btn-outline-secondary');
+        closeButton.addEventListener('click', async () => {
+            bootstrap.Modal.getInstance(modal).hide();
+
+            await refreshHomePage();
+        });
+    } catch (error) {
+        ModalUtils.handleModalError(error, 'File upload modal', modal);
     }
-
-    // add event listener for save button
-    const closeButton = modal.querySelector('.btn-outline-secondary');
-    closeButton.addEventListener('click', async () => {
-        bootstrap.Modal.getInstance(modal).hide();
-
-        await refreshHomePage();
-    });
 }
 
+/**
+ * Renders a modal for creating new folders in the repository
+ * 
+ * @function renderAddFolderModal
+ * 
+ * @returns {void}
+ * @throws {Error} Throws error if modal setup or folder creation fails
+ */
 export const renderAddFolderModal = () => {
+    try {
+        const { modal, header, body, footer } = ModalUtils.setupModal('Add Folder');
 
-    const modal = document.getElementById('modal');
-    const modalHeader = modal.querySelector('.modal-header');
-    const modalBody = modal.querySelector('.modal-body');
-    const modalFooter = modal.querySelector('.modal-footer');
+        // Initialize the modal body with Folder Name field using form utility
+        const folderNameField = { id: 'folderName', label: 'Folder Name', required: true, type: 'text' };
+        body.innerHTML = FORM_UTILS.generateFormField(folderNameField);
 
-    // Set the modal title
-    modalHeader.innerHTML = `
-        <h5 class="modal-title">Add Folder</h5>
-    `;
-
-    // Initialize the modal body with Folder Name field
-    modalBody.innerHTML = `
-        <div class="row mb-3">
-            <div class="col-4">
-                <label for="folderName" class="col-form-label">Folder Name*</label>
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="folderName" required>
-            </div>
-        </div>
-    `;
-
-    // Update the modal footer with Cancel and Create buttons
-    modalFooter.innerHTML = `
-        <div class="w-100 d-flex justify-content-end">
-            <button type="button" class="btn btn-outline-secondary me-2" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" class="btn btn-outline-success">Create</button>
-        </div>
-    `;
+        // Update the modal footer using template
+        footer.innerHTML = MODAL_TEMPLATES.footer([
+            { text: 'Cancel', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' },
+            { text: 'Create', class: MODAL_CONFIG.MODAL_CLASSES.SUCCESS }
+        ]);
 
     // Show the modal
     new bootstrap.Modal(modal).show();
@@ -803,13 +951,23 @@ export const renderAddFolderModal = () => {
             hideAnimation();
         }
     });
+    } catch (error) {
+        ModalUtils.handleModalError(error, 'Add folder modal setup', modal);
+    }
 }
 
+/**
+ * Renders a comprehensive configuration modal for managing concept field definitions
+ * 
+ * @async
+ * @function renderConfigModal
+ * 
+ * @returns {Promise<void>} Resolves when modal is rendered and configuration is loaded
+ * @throws {Error} Throws error if configuration loading, parsing, or saving fails
+ */
 export const renderConfigModal = async () => {
-    const modal = document.getElementById('modal');
-    const modalHeader = modal.querySelector('.modal-header');
-    const modalBody = modal.querySelector('.modal-body');
-    const modalFooter = modal.querySelector('.modal-footer');
+    try {
+        const { modal, header, body, footer } = ModalUtils.setupModal('Configuration Settings');
     
     // Get current config from appState
     const { config } = appState.getState();
@@ -819,76 +977,17 @@ export const renderConfigModal = async () => {
         <h5 class="modal-title">Configuration Settings</h5>
     `;
     
-    // Create the tab structure for different concept types
-    const conceptTypes = ['PRIMARY', 'SECONDARY', 'SOURCE', 'QUESTION', 'RESPONSE'];
-    
-    // Create tab headers
-    let tabHeaders = '<ul class="nav nav-tabs" id="configTabs" role="tablist">';
-    conceptTypes.forEach((type, index) => {
-        tabHeaders += `
-            <li class="nav-item" role="presentation">
-                <button class="nav-link ${index === 0 ? 'active' : ''}" 
-                    id="${type.toLowerCase()}-tab" 
-                    data-bs-toggle="tab" 
-                    data-bs-target="#${type.toLowerCase()}-pane" 
-                    type="button" 
-                    role="tab" 
-                    aria-controls="${type.toLowerCase()}-pane" 
-                    aria-selected="${index === 0 ? 'true' : 'false'}">
-                    ${type}
-                </button>
-            </li>
-        `;
-    });
-    tabHeaders += '</ul>';
-    
-    // Create tab content
-    let tabContent = '<div class="tab-content mt-3" id="configTabContent">';
-    conceptTypes.forEach((type, index) => {
-        tabContent += `
-            <div class="tab-pane fade ${index === 0 ? 'show active' : ''}" 
-                id="${type.toLowerCase()}-pane" 
-                role="tabpanel" 
-                aria-labelledby="${type.toLowerCase()}-tab" 
-                tabindex="0">
-                <div class="mb-3">
-                    <h6>${type} Fields</h6>
-                    <table class="table table-bordered table-sm">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Label</th>
-                                <th>Type</th>
-                                <th>Required</th>
-                                <th>Reference Type</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="${type.toLowerCase()}-fields">
-                            ${generateFieldRows(config[type] || [], type)}
-                        </tbody>
-                    </table>
-                    <button class="btn btn-sm btn-outline-primary add-field-btn" 
-                        data-type="${type}">
-                        <i class="bi bi-plus-circle"></i> Add Field
-                    </button>
-                </div>
-            </div>
-        `;
-    });
-    tabContent += '</div>';
-    
-    // Full modal body content
-    modalBody.innerHTML = `
-        ${tabHeaders}
-        ${tabContent}
-    `;
-    
-    // Set up the modal footer
-    modalFooter.innerHTML = `
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-outline-primary" id="saveConfigBtn">Save Changes</button>
-    `;
+        // Use template for configuration tabs
+        body.innerHTML = MODAL_TEMPLATES.configurationTabs(
+            MODAL_CONFIG.CONCEPT_TYPES,
+            (type) => FORM_UTILS.generateConfigTable(type, config[type] || [], MODAL_CONFIG.CONCEPT_TYPES)
+        );
+        
+        // Set up the modal footer using template
+        footer.innerHTML = MODAL_TEMPLATES.footer([
+            { text: 'Cancel', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' },
+            { text: 'Save Changes', class: MODAL_CONFIG.MODAL_CLASSES.PRIMARY, attributes: 'id="saveConfigBtn"' }
+        ]);
     
     // Show the modal
     new bootstrap.Modal(modal).show();
@@ -1024,48 +1123,40 @@ export const renderConfigModal = async () => {
             hideAnimation();
         }
     });
+    } catch (error) {
+        ModalUtils.handleModalError(error, 'Configuration modal setup', modal);
+    }
 }
 
+/**
+ * Generates HTML table rows for configuration field editing
+ * 
+ * @function generateFieldRows
+ * 
+ * @param {Array<Object>} fields - Array of field configuration objects
+ * @param {string} conceptType - Type of concept (PRIMARY, SECONDARY, etc.)
+ * @returns {string} HTML string containing table rows for field editing
+ * @throws {Error} Throws error if field rendering fails
+ */
 function generateFieldRows(fields, conceptType) {
     if (!fields || !Array.isArray(fields)) return '';
     
-    return fields.map(field => `
-        <tr>
-            <td><input type="text" class="form-control form-control-sm field-id" value="${field.id || ''}"></td>
-            <td><input type="text" class="form-control form-control-sm field-label" value="${field.label || ''}"></td>
-            <td>
-                <select class="form-select form-select-sm field-type">
-                    <option value="text" ${field.type === 'text' ? 'selected' : ''}>text</option>
-                    <option value="concept" ${field.type === 'concept' ? 'selected' : ''}>concept</option>
-                    <option value="reference" ${field.type === 'reference' ? 'selected' : ''}>reference</option>
-                    <option value="array" ${field.type === 'array' ? 'selected' : ''}>array</option>
-                    <option value="textarea" ${field.type === 'textarea' ? 'selected' : ''}>textarea</option>
-                </select>
-            </td>
-            <td>
-                <div class="form-check">
-                    <input class="form-check-input field-required" type="checkbox" ${field.required ? 'checked' : ''}>
-                </div>
-            </td>
-            <td>
-                <select class="form-select form-select-sm field-reference-type" ${field.type !== 'reference' ? 'disabled' : ''}>
-                    <option value="">None</option>
-                    <option value="PRIMARY" ${field.referencesType === 'PRIMARY' ? 'selected' : ''}>PRIMARY</option>
-                    <option value="SECONDARY" ${field.referencesType === 'SECONDARY' ? 'selected' : ''}>SECONDARY</option>
-                    <option value="SOURCE" ${field.referencesType === 'SOURCE' ? 'selected' : ''}>SOURCE</option>
-                    <option value="QUESTION" ${field.referencesType === 'QUESTION' ? 'selected' : ''}>QUESTION</option>
-                    <option value="RESPONSE" ${field.referencesType === 'RESPONSE' ? 'selected' : ''}>RESPONSE</option>
-                </select>
-            </td>
-            <td>
-                <button class="btn btn-sm btn-outline-danger delete-field-btn">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
+    const conceptTypes = Object.keys(MODAL_CONFIG.CONCEPT_TYPES);
+    return fields.map(field => FORM_UTILS.generateConfigRow(field, conceptTypes)).join('');
 }
 
+/**
+ * Saves edited concept data back to the repository with validation
+ * 
+ * @async
+ * @function saveEditedConcept
+ * 
+ * @param {Object} originalContent - Original concept data before editing
+ * @param {Array<Object>} typeConfig - Field configuration for the concept type
+ * @param {string} file - Filename of the concept being edited
+ * @returns {Promise<void>} Resolves when concept is successfully saved
+ * @throws {Error} Throws error if validation fails or file update fails
+ */
 async function saveEditedConcept(originalContent, typeConfig, file) {
     try {
         showAnimation();

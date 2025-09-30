@@ -95,3 +95,44 @@ export const API_CONFIG = {
     /** Request timeout in milliseconds */
     TIMEOUT: 30000
 };
+
+/**
+ * Modal configuration settings
+ */
+export const MODAL_CONFIG = {
+    /** Default modal element selector */
+    MODAL_SELECTOR: '#modal',
+
+    /** CSS classes for different modal types */
+    MODAL_CLASSES: {
+        SUCCESS: 'btn-outline-success',
+        DANGER: 'btn-outline-danger',
+        PRIMARY: 'btn-outline-primary',
+        SECONDARY: 'btn-outline-secondary'
+    },
+
+    /** Default concept types for configuration */
+    CONCEPT_TYPES: ['PRIMARY', 'SECONDARY', 'SOURCE', 'QUESTION', 'RESPONSE'],
+
+    /** Field types available in configuration */
+    FIELD_TYPES: [
+        { value: 'text', label: 'Text' },
+        { value: 'concept', label: 'Concept' },
+        { value: 'reference', label: 'Reference' },
+        { value: 'array', label: 'Array' },
+        { value: 'textarea', label: 'Textarea' }
+    ],
+
+    /** Validation messages */
+    VALIDATION_MESSAGES: {
+        REQUIRED_FIELD: 'This field is required.',
+        INVALID_FORMAT: 'Invalid format.',
+        KEY_EXISTS: 'This key already exists. Please use a unique key.',
+        INVALID_FOLDER_NAME: 'Folder Name contains illegal characters.',
+        SAVE_ERROR: 'An error occurred while saving.',
+        DELETE_CONFIRM: 'Are you sure you want to delete this item?'
+    },
+    
+    /** File name validation regex */
+    ILLEGAL_CHARS_REGEX: /[\\/:*?"<>|]/
+};
