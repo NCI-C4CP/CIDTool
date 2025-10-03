@@ -12,8 +12,8 @@
  * @requires config - Modal configuration constants
  */
 
-import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, validateFormFields, showUserNotification } from './common.js';
-import { addFile, deleteFile, addFolder, getConcept, getFiles, updateFile } from './api.js';
+import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, validateFormFields, showUserNotification, formatConceptDisplay, extractConcept } from './common.js';
+import { addFile, deleteFile, addFolder, getConcept, getFiles, updateFile, checkReferences } from './api.js';
 import { refreshHomePage } from './homepage.js';
 import { MODAL_CONFIG } from './config.js';
 import { MODAL_TEMPLATES, FORM_UTILS } from './templates.js';
@@ -191,8 +191,6 @@ const ModalUtils = {
  */
 export const renderAddModal = async (importData = null, importOptions = {}) => {
     try {
-        console.log(appState.getState());
-        
         // Determine modal mode and title
         const isImportMode = !!importData;
         const modalTitle = isImportMode ? 
@@ -267,6 +265,18 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
         const initialType = importData?.object_type || 'PRIMARY';
         renderTemplateFields(initialType);
         
+        // Set up multi-select for any RESPONSE reference fields in initial render
+        setTimeout(() => {
+            const conceptTemplates = appState.getState().config;
+            if (conceptTemplates[initialType]) {
+                conceptTemplates[initialType].forEach(field => {
+                    if (field.type === 'reference' && field.referencesType === 'RESPONSE') {
+                        setupResponseMultiSelect(field.id);
+                    }
+                });
+            }
+        }, 100);
+        
         // If we have import data, populate the form fields
         if (isImportMode) {
             populateFormWithImportData(importData);
@@ -276,9 +286,17 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
         document.getElementById('conceptType').addEventListener('change', (e) => {
             renderTemplateFields(e.target.value);
 
-            if (e.target.value === 'QUESTION') {
-                setTimeout(setupResponseMultiSelect, 100);
-            }
+            // Set up multi-select for any RESPONSE reference fields
+            setTimeout(() => {
+                const conceptTemplates = appState.getState().config;
+                if (conceptTemplates[e.target.value]) {
+                    conceptTemplates[e.target.value].forEach(field => {
+                        if (field.type === 'reference' && field.referencesType === 'RESPONSE') {
+                            setupResponseMultiSelect(field.id);
+                        }
+                    });
+                }
+            }, 100);
         });
 
         // Add event listener for the Save/Accept button
@@ -434,10 +452,9 @@ const validateField = (field, value) => {
     return true;
 };
 
-const setupResponseMultiSelect = () => {
-    const container = document.getElementById('responses_container');
-    const pillsContainer = document.getElementById('responses_pills');
-    const hiddenInput = document.getElementById('responses');
+const setupResponseMultiSelect = (fieldId = 'responses') => {
+    const pillsContainer = document.getElementById(`${fieldId}_pills`);
+    const hiddenInput = document.getElementById(fieldId);
     const checkboxes = document.querySelectorAll('.response-checkbox');
 
     const updatePills = () => {
@@ -476,7 +493,7 @@ const setupResponseMultiSelect = () => {
     pillsContainer.addEventListener('click', (e) => {
         if (e.target.classList.contains('pill-remove')) {
             const optionId = e.target.getAttribute('data-id');
-            const checkbox = document.getElementById(`responses_${optionId}`);
+            const checkbox = document.getElementById(`${fieldId}_${optionId}`);
             if (checkbox) {
                 checkbox.checked = false;
                 updatePills();
@@ -485,46 +502,86 @@ const setupResponseMultiSelect = () => {
     });
 }
 
+
+
 /**
  * Renders a confirmation modal for deleting files from the repository
  * 
+ * @async
  * @function renderDeleteModal
  * 
  * @param {Event} event - Click event from delete button containing file metadata
+ * @returns {Promise<void>}
  * @throws {Error} Throws error if file deletion fails or modal setup fails
  */
-export const renderDeleteModal = (event) => {
+export const renderDeleteModal = async (event) => {
     try {
         const button = event.target;
         const file = button.getAttribute('data-bs-file');
 
-        const { modal, header, body, footer } = ModalUtils.setupModal('Delete File');
+        const { modal, body, footer } = ModalUtils.setupModal('Delete File');
 
-        // Use template for confirmation dialog
-        body.innerHTML = MODAL_TEMPLATES.confirmationDialog('Are you sure you want to delete', file);
-
-        // Use template for modal footer
+        // Extract concept ID from filename for reference checking
+        const conceptId = file.replace('.json', '');
+        
+        // Show loading state while checking references
+        body.innerHTML = MODAL_TEMPLATES.infoAlert('Checking for references...');
         footer.innerHTML = MODAL_TEMPLATES.footer([
-            { text: 'Cancel', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' },
-            { text: 'Confirm', class: MODAL_CONFIG.MODAL_CLASSES.DANGER }
+            { text: 'Cancel', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' }
         ]);
 
         ModalUtils.showModal(modal);
 
-    // add event listener for confirm button
-    const confirmButton = modal.querySelector('.btn-outline-danger');
-    confirmButton.addEventListener('click', async () => {
-        
-        showAnimation();
-        
-        const sha = button.getAttribute('data-bs-sha');
-        await deleteFile(file, sha);
+        try {
+            // Call backend API to check for references
+            const referencingConcepts = await checkReferences(conceptId);
+            
+            if (referencingConcepts.files.length > 0) {
+                // Show error message with list of referencing concept names
+                const conceptNames = referencingConcepts.files.map(file => file.name).join('<br>• ');
+                
+                body.innerHTML = MODAL_TEMPLATES.errorAlert(
+                    'Cannot Delete Concept',
+                    `This concept is referenced by the following concepts:<br><br>• ${conceptNames}<br><br>Please remove these references before deleting this concept.`
+                );
+                
+                footer.innerHTML = MODAL_TEMPLATES.footer([
+                    { text: 'Close', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' }
+                ]);
+            } else {
+                // No references found, show normal confirmation
+                body.innerHTML = MODAL_TEMPLATES.confirmationDialog('Confirmation Required', 'Are you sure you want to delete this concept? This action cannot be undone.', file);
 
-        bootstrap.Modal.getInstance(modal).hide();
+                footer.innerHTML = MODAL_TEMPLATES.footer([
+                    { text: 'Cancel', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' },
+                    { text: 'Delete', class: MODAL_CONFIG.MODAL_CLASSES.DANGER, attributes: 'id="confirmDeleteBtn"' }
+                ]);
 
-        refreshHomePage();
-        hideAnimation();
-    });
+                // Add event listener for confirm button
+                const confirmButton = modal.querySelector('#confirmDeleteBtn');
+                confirmButton.addEventListener('click', async () => {
+                    showAnimation();
+                    
+                    const sha = button.getAttribute('data-bs-sha');
+                    await deleteFile(file, sha);
+
+                    bootstrap.Modal.getInstance(modal).hide();
+                    refreshHomePage();
+                    hideAnimation();
+                });
+            }
+        } catch (error) {
+            console.error('Error checking references:', error);
+            // Show error and block deletion - better safe than sorry
+            body.innerHTML = MODAL_TEMPLATES.errorAlert(
+                'Cannot Delete Concept',
+                'Unable to verify if this concept is referenced by others. Deletion has been blocked for safety. Please try again or check your connection.'
+            );
+            
+            footer.innerHTML = MODAL_TEMPLATES.footer([
+                { text: 'Close', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' }
+            ]);
+        }
     } catch (error) {
         ModalUtils.handleModalError(error, 'Delete confirmation modal', modal);
     }
@@ -685,11 +742,6 @@ function renderViewMode(container, content, typeConfig) {
             .badge-reference {
                 background-color: #6c757d;
             }
-            .badge-array {
-                background-color: #f8f9fa;
-                color: #212529;
-                border: 1px solid #dee2e6;
-            }
             .metadata-section {
                 background-color: #f8f9fa;
                 border-radius: 5px;
@@ -737,18 +789,22 @@ function renderViewMode(container, content, typeConfig) {
                         coreFields.appendChild(fieldGroup);
                         break;
                     case 'reference':
-                        fieldHTML = `<div class="field-value"><span class="badge badge-reference">${fieldValue}</span></div>`;
-                        referenceFields.appendChild(fieldGroup);
-                        break;
-                    case 'array':
                         if (Array.isArray(fieldValue) && fieldValue.length > 0) {
+                            // Multi-select reference field - show each value as separate badge
                             fieldHTML = `<div class="field-value">${fieldValue.map(item => 
-                                `<span class="badge badge-array me-1 mb-1">${item}</span>`
+                                `<span class="badge badge-reference me-1 mb-1">${item}</span>`
                             ).join('')}</div>`;
-                        } else if (typeof fieldValue === 'string') {
-                            fieldHTML = `<div class="field-value">${fieldValue}</div>`;
+                        } else if (typeof fieldValue === 'string' && fieldValue.includes(',')) {
+                            // Handle comma-separated string values - split and show as separate badges
+                            const values = fieldValue.split(',').map(v => v.trim()).filter(v => v);
+                            fieldHTML = `<div class="field-value">${values.map(item => 
+                                `<span class="badge badge-reference me-1 mb-1">${item}</span>`
+                            ).join('')}</div>`;
+                        } else {
+                            // Single reference value
+                            fieldHTML = `<div class="field-value"><span class="badge badge-reference">${fieldValue}</span></div>`;
                         }
-                        otherFields.appendChild(fieldGroup);
+                        referenceFields.appendChild(fieldGroup);
                         break;
                     default:
                         fieldHTML = `<div class="field-value">${fieldValue}</div>`;
@@ -830,15 +886,53 @@ function renderEditMode(container, content, typeConfig) {
             const fieldRow = document.createElement('div');
             fieldRow.innerHTML = FORM_UTILS.generateFormField(field, fieldValue, 'edit');
 
-            // Replace the select with reference dropdown
+            // Replace the select with reference dropdown using edit_ prefix
             const selectElement = fieldRow.querySelector('select');
             if (selectElement) {
-                selectElement.outerHTML = createReferenceDropdown(field);
+                selectElement.outerHTML = createReferenceDropdown(field, 'edit_');
                 // Set the selected value after rendering
                 setTimeout(() => {
-                    const newSelectElement = document.getElementById(`edit_${field.id}`);
-                    if (newSelectElement) {
-                        newSelectElement.value = fieldValue;
+                    if (field.referencesType === 'RESPONSE') {
+                        // Handle multi-select reference (RESPONSE type)
+                        setupResponseMultiSelect(`edit_${field.id}`);
+                        
+                        // Pre-populate checkboxes with current values
+                        if (Array.isArray(fieldValue) && fieldValue.length > 0) {
+                            fieldValue.forEach(conceptId => {
+                                // Convert concept ID to display format to find matching checkbox
+                                const { index } = appState.getState();
+                                const matchingFile = Object.keys(index).find(fileName => 
+                                    fileName.replace('.json', '') === conceptId
+                                );
+                                if (matchingFile) {
+                                    const displayValue = formatConceptDisplay(matchingFile);
+                                    const checkbox = document.getElementById(`edit_${field.id}_${displayValue}`);
+                                    if (checkbox) {
+                                        checkbox.checked = true;
+                                    }
+                                }
+                            });
+                            
+                            // Trigger update to show pills
+                            const firstCheckbox = document.querySelector(`#edit_${field.id}_container ~ .dropdown-menu .response-checkbox`);
+                            if (firstCheckbox) {
+                                firstCheckbox.dispatchEvent(new Event('change'));
+                            }
+                        }
+                    } else {
+                        // Handle single-select reference
+                        const newSelectElement = document.getElementById(`edit_${field.id}`);
+                        if (newSelectElement && fieldValue) {
+                            // Convert stored concept ID back to display format
+                            const { index } = appState.getState();
+                            const matchingFile = Object.keys(index).find(fileName => 
+                                fileName.replace('.json', '') === fieldValue
+                            );
+                            if (matchingFile) {
+                                const displayValue = formatConceptDisplay(matchingFile);
+                                newSelectElement.value = displayValue;
+                            }
+                        }
                     }
                 }, 0);
             }
@@ -877,15 +971,6 @@ function createFieldRow(key, value, fieldConfig = null) {
             case 'reference':
                 // Format reference fields specially
                 formattedValue = `<span class="badge bg-secondary">${value}</span>`;
-                break;
-                
-            case 'array':
-                // Format arrays
-                if (Array.isArray(value)) {
-                    formattedValue = value.map(item => 
-                        `<span class="badge bg-light text-dark me-1 mb-1">${item}</span>`
-                    ).join('');
-                }
                 break;
         }
     } else {
@@ -1094,8 +1179,6 @@ export const renderConfigModal = async () => {
                         <option value="text">text</option>
                         <option value="concept">concept</option>
                         <option value="reference">reference</option>
-                        <option value="array">array</option>
-                        <option value="textarea">textarea</option>
                     </select>
                 </td>
                 <td>
@@ -1162,7 +1245,7 @@ export const renderConfigModal = async () => {
             // Build new config object from UI
             const newConfig = {};
             
-            conceptTypes.forEach(type => {
+            MODAL_CONFIG.CONCEPT_TYPES.forEach(type => {
                 newConfig[type] = [];
                 
                 const fieldRows = document.querySelectorAll(`#${type.toLowerCase()}-fields tr`);
@@ -1258,29 +1341,29 @@ async function saveEditedConcept(originalContent, typeConfig, file) {
             
             let value = fieldElement.value;
             
-            // Handle arrays and special types
-            if (field.type === 'array') {
-                if (value.trim()) {
+            // Handle reference types
+            if (field.type === 'reference') {
+                if (field.referencesType === 'RESPONSE') {
+                    // Multi-select reference - parse JSON array and extract concept IDs
                     try {
-                        if (value.startsWith('[') && value.endsWith(']')) {
-                            // Try parsing as JSON
-                            value = JSON.parse(value);
-                        } else {
-                            // Split by comma
-                            value = value.split(',').map(item => item.trim()).filter(item => item);
-                        }
+                        const selectedItems = JSON.parse(value);
+                        value = Array.isArray(selectedItems) ? selectedItems.map(item => extractConcept(item)) : [];
                     } catch (e) {
-                        // If parsing fails, treat as a single value
-                        console.error('Error parsing array value:', e);
+                        console.error('Error parsing multi-select reference value:', e);
+                        value = [];
                     }
                 } else {
-                    value = [];
+                    // Single-select reference - extract concept ID from display format
+                    value = extractConcept(value);
                 }
             }
             
             // Check if the field should be removed or updated
-            const isEmpty = (field.type === 'array' && Array.isArray(value) && value.length === 0) ||
-                           (field.type !== 'array' && (!value || value.trim() === ''));
+            const isEmpty = field.type === 'reference' 
+                ? (field.referencesType === 'RESPONSE' 
+                    ? (Array.isArray(value) && value.length === 0)  // Multi-select reference
+                    : (!value || value.trim() === ''))              // Single-select reference
+                : (!value || value.trim() === '');                 // Other field types (text, concept)
             
             if (isEmpty && !field.required) {
                 // Remove the key from the object for non-required empty fields

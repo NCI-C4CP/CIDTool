@@ -119,8 +119,7 @@ export const MODAL_CONFIG = {
     FIELD_TYPES: [
         { value: 'text', label: 'Text' },
         { value: 'concept', label: 'Concept' },
-        { value: 'reference', label: 'Reference' },
-        { value: 'array', label: 'Array' }
+        { value: 'reference', label: 'Reference' }
     ],
 
     /** Validation messages */

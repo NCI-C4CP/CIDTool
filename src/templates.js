@@ -92,10 +92,12 @@ export const MODAL_TEMPLATES = {
      * @returns {string} Modal footer HTML
      */
     footer: (buttons, layout = 'between') => {
-        const buttonElements = buttons.map(btn => {
+        const buttonElements = buttons.map((btn, index) => {
             const id = btn.id ? `id="${btn.id}"` : '';
             const attributes = btn.attributes || '';
-            return `<button type="button" class="btn ${btn.class}" ${id} ${attributes}>${btn.text}</button>`;
+            // Add me-2 spacing to all buttons except the last one
+            const spacingClass = index < buttons.length - 1 ? ' me-2' : '';
+            return `<button type="button" class="btn ${btn.class}${spacingClass}" ${id} ${attributes}>${btn.text}</button>`;
         }).join('');
         
         const layoutClass = layout === 'between' ? 'justify-content-between' : 
@@ -313,11 +315,7 @@ export const FORM_UTILS = {
                 // This should use the existing createReferenceDropdown function
                 return `<select class="form-select" id="${fieldId}" ${attributes}></select>`;
                 
-            case 'array':
-                return `
-                    <textarea class="form-control" id="${fieldId}" rows="3" ${attributes}>${Array.isArray(value) ? value.join(', ') : value}</textarea>
-                    <div class="form-text">Enter multiple values separated by commas</div>
-                `;
+
                 
             case 'checkbox':
                 return `
@@ -374,7 +372,6 @@ export const FORM_UTILS = {
                     <option value="text" ${field.type === 'text' ? 'selected' : ''}>text</option>
                     <option value="concept" ${field.type === 'concept' ? 'selected' : ''}>concept</option>
                     <option value="reference" ${field.type === 'reference' ? 'selected' : ''}>reference</option>
-                    <option value="array" ${field.type === 'array' ? 'selected' : ''}>array</option>
                 </select>
             </td>
             <td>

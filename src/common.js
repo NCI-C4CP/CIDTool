@@ -261,9 +261,10 @@ export const removeEventListeners = (element) => {
  * @param {string} field.id - The field ID for HTML elements
  * @param {string} field.referencesType - The type of concepts to reference
  * @param {boolean} field.required - Whether the field is required
+ * @param {string} prefix - Optional prefix for field IDs (e.g., 'edit_')
  * @returns {string} HTML string for the dropdown element
  */
-export const createReferenceDropdown = (field) => {
+export const createReferenceDropdown = (field, prefix = '') => {
     const { objects } = appState.getState();
     const referencedConcepts = [];
     const targetType = field.referencesType;
@@ -282,9 +283,11 @@ export const createReferenceDropdown = (field) => {
     // Sort concepts for better UX
     referencedConcepts.sort((a, b) => a.id.localeCompare(b.id));
     
+    const fieldId = prefix ? `${prefix}${field.id}` : field.id;
+    
     if (referencedConcepts.length === 0) {
         return `
-            <select class="form-select" id="${field.id}" ${field.required ? 'required' : ''} disabled>
+            <select class="form-select" id="${fieldId}" ${field.required ? 'required' : ''} disabled>
                 <option value="">No ${targetType} concepts available</option>
             </select>
             <div class="form-text text-warning">You need to create a ${targetType} concept first</div>
@@ -294,26 +297,26 @@ export const createReferenceDropdown = (field) => {
         return `
             <div class="dropdown-container">
                 <div class="form-control d-flex flex-wrap align-items-center" 
-                    id="${field.id}_container" role="button" data-bs-toggle="dropdown" 
+                    id="${fieldId}_container" role="button" data-bs-toggle="dropdown" 
                     aria-expanded="false">
                     <span class="dropdown-text">Select Responses</span>
                 </div>
                 
-                <div class="dropdown-menu p-2 w-100" aria-labelledby="${field.id}_container">
+                <div class="dropdown-menu p-2 w-100" aria-labelledby="${fieldId}_container">
                     <div class="response-options" style="max-height: 200px; overflow-y: auto;">
                         ${referencedConcepts.map(option => `
                             <div class="form-check">
                                 <input class="form-check-input response-checkbox" type="checkbox" 
-                                    value="${option.id}" id="${field.id}_${option.id}">
-                                <label class="form-check-label w-100" for="${field.id}_${option.id}">
+                                    value="${option.id}" id="${fieldId}_${option.id}">
+                                <label class="form-check-label w-100" for="${fieldId}_${option.id}">
                                     ${option.id}
                                 </label>
                             </div>
                         `).join('')}
                     </div>
                 </div>
-                <div id="${field.id}_pills" class="selected-pills d-flex flex-wrap mt-2"></div>
-                <input type="hidden" id="${field.id}" value="[]">
+                <div id="${fieldId}_pills" class="selected-pills d-flex flex-wrap mt-2"></div>
+                <input type="hidden" id="${fieldId}" value="[]">
             </div>
             <style>
                 .selected-pills { 
@@ -340,7 +343,7 @@ export const createReferenceDropdown = (field) => {
     }
     
     return `
-        <select class="form-select" id="${field.id}" ${field.required ? 'required' : ''}>
+        <select class="form-select" id="${fieldId}" ${field.required ? 'required' : ''}>
             <option value="">-- Select a ${targetType} concept --</option>
             ${referencedConcepts.map(concept => 
                 `<option value="${concept.id}">${concept.id}</option>`
@@ -376,15 +379,28 @@ export const validateFormFields = (payload, template) => {
             return;
         }
 
+        // concept checking shouldn't be needed
         switch (field.type) {
-            case 'array':
-                // TODO: Handle array field validation
-                break;
                 
             case 'reference':
-                // Store reference ID directly
+                // Handle both single-select and multi-select reference fields
                 if (fieldElement.value) {
-                    payload['parent'] = extractConcept(fieldElement.value);
+                    // Check if this is a multi-select field (RESPONSE type with pills)
+                    if (field.referencesType === 'RESPONSE') {
+                        try {
+                            // Parse the JSON array of selected items
+                            const selectedItems = JSON.parse(fieldElement.value);
+                            if (Array.isArray(selectedItems)) {
+                                // Extract concepts from each selected item
+                                payload[field.id] = selectedItems.map(item => extractConcept(item));
+                            } 
+                        } catch (e) {
+                            console.error('Error parsing multi-select reference value:', e);
+                        }
+                    } else {
+                        // Single-select reference field - extract one concept
+                        payload[field.id] = extractConcept(fieldElement.value);
+                    }
                 }
                 break;
                 

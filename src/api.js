@@ -17,6 +17,7 @@ import { toBase64, isLocal, appState, fromBase64, isTokenError, showUserNotifica
  */
 const getApiBaseUrl = () => {
     return isLocal() ? API_CONFIG.BASE_URL_LOCAL : API_CONFIG.BASE_URL;
+    //return API_CONFIG.BASE_URL;
 };
 
 /**
@@ -417,6 +418,28 @@ export const getConfigurationSettings = async () => {
         // Configuration is optional, so we don't want to show user errors for missing config
         console.warn('Configuration file not found or invalid, using defaults');
     }
+};
+
+/**
+ * Checks if a concept is referenced by other concepts in the repository
+ * 
+ * @async
+ * @function checkReferences
+ * @param {string} conceptId - The concept ID to check for references
+ * 
+ * @returns {Promise<Array<string>>} Array of concept IDs that reference the given concept
+ * @throws {Error} Throws error if reference checking fails
+ */
+export const checkReferences = async (conceptId) => {
+    const { owner, repoName } = appState.getState();
+    
+    return await makeApiRequest(
+        `searchFiles&owner=${owner}&repo=${repoName}&query=${conceptId}`,
+        { 
+            method: 'GET' 
+        },
+        'Check concept references'
+    );
 };
 
 /**
