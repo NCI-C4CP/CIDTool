@@ -41,3 +41,36 @@ button:disabled.text-muted {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Response dropdown styles */
+.selected-pills { 
+    gap: 5px; 
+    min-height: 30px;
+}
+
+.response-pill {
+    background: #e9ecef !important;
+    padding: 2px 8px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    font-size: 0.875rem;
+}
+
+.dropdown-container .form-control {
+    cursor: pointer;
+    min-height: 38px;
+}
+
+.dropdown-container .dropdown-menu {
+    max-width: 100%;
+}
+
+.response-options .form-check {
+    margin-bottom: 0.5rem;
+}
+
+.response-options .form-check-label {
+    cursor: pointer;
+    padding: 0.25rem 0;
+}

@@ -80,7 +80,7 @@ export const refreshHomePage = async () => {
  * @async
  * @function renderRepoContent
  * @description Fetches and displays the contents of a GitHub repository directory,
- * including concept files, folders, and metadata. Handles index.json and object.json
+ * including concept files, folders, and metadata. Handles index.json
  * files for concept dictionary functionality.
  * 
  * @param {Object} repo - Repository object from GitHub API
@@ -105,22 +105,14 @@ const renderRepoContent = async (repo, directory) => {
 
         // Initialize index content
         let indexContent = {};
-        let objectContent = {};
 
         // Find 'index.json' in the files list
         const indexFile = files.find(file => file.name === 'index.json');
-        const objectFile = files.find(file => file.name === 'object.json');
 
         if (indexFile) {
             const indexResponse = await getFiles(indexFile.name); // Assuming getFiles can fetch individual files
             const indexContentString = fromBase64(indexResponse.data.content);
             indexContent = JSON.parse(indexContentString);
-        }
-
-        if (objectFile) {
-            const objectResponse = await getFiles(objectFile.name);
-            const objectContentString = fromBase64(objectResponse.data.content);
-            objectContent = JSON.parse(objectContentString);
         }
 
         // Exclude files using configuration constants
@@ -132,7 +124,7 @@ const renderRepoContent = async (repo, directory) => {
         }
 
         // Update appState with files and index
-        appState.setState({ files: filesWithoutIndex, index: indexContent, objects: objectContent });
+        appState.setState({ files: filesWithoutIndex, index: indexContent });
 
         await getConfigurationSettings();
         renderSearchBar();

@@ -421,6 +421,28 @@ export const getConfigurationSettings = async () => {
 };
 
 /**
+ * Retrieves concepts by their object type using GitHub Search API
+ * 
+ * @async
+ * @function getConceptsByType
+ * @param {string} conceptType - The concept type to search for (e.g., 'PRIMARY', 'SECONDARY', 'RESPONSE')
+ * 
+ * @returns {Promise<Object>} API response containing files that match the concept type
+ * @throws {Error} Throws error if search fails
+ */
+export const getConceptsByType = async (conceptType) => {
+    const { owner, repoName } = appState.getState();
+    
+    return await makeApiRequest(
+        `searchFiles&owner=${owner}&repo=${repoName}&query="object_type": "${conceptType}"`,
+        { 
+            method: 'GET' 
+        },
+        'Get concepts by type'
+    );
+};
+
+/**
  * Checks if a concept is referenced by other concepts in the repository
  * 
  * @async

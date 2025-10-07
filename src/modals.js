@@ -453,7 +453,7 @@ const validateField = (field, value) => {
 };
 
 const setupResponseMultiSelect = (fieldId = 'responses') => {
-    const pillsContainer = document.getElementById(`${fieldId}_pills`);
+    const pillsContainer = document.getElementById(`${fieldId}_container`);
     const hiddenInput = document.getElementById(fieldId);
     const checkboxes = document.querySelectorAll('.response-checkbox');
 
@@ -681,15 +681,15 @@ export const renderViewModal = async (event) => {
                     document.getElementById('editButton').removeAttribute('disabled');
                 }
 
-                document.getElementById('editButton').addEventListener('click', () => {
+                document.getElementById('editButton').addEventListener('click', async () => {
                     // Switch to edit mode
                     modal.isEditMode = true;
-                    renderModalContent();
+                    await renderModalContent();
                 });
             }
         };
 
-        renderModalContent();
+        await renderModalContent();
 
         new bootstrap.Modal(modal).show();
 
@@ -889,52 +889,9 @@ function renderEditMode(container, content, typeConfig) {
             // Replace the select with reference dropdown using edit_ prefix
             const selectElement = fieldRow.querySelector('select');
             if (selectElement) {
-                selectElement.outerHTML = createReferenceDropdown(field, 'edit_');
-                // Set the selected value after rendering
-                setTimeout(() => {
-                    if (field.referencesType === 'RESPONSE') {
-                        // Handle multi-select reference (RESPONSE type)
-                        setupResponseMultiSelect(`edit_${field.id}`);
-                        
-                        // Pre-populate checkboxes with current values
-                        if (Array.isArray(fieldValue) && fieldValue.length > 0) {
-                            fieldValue.forEach(conceptId => {
-                                // Convert concept ID to display format to find matching checkbox
-                                const { index } = appState.getState();
-                                const matchingFile = Object.keys(index).find(fileName => 
-                                    fileName.replace('.json', '') === conceptId
-                                );
-                                if (matchingFile) {
-                                    const displayValue = formatConceptDisplay(matchingFile);
-                                    const checkbox = document.getElementById(`edit_${field.id}_${displayValue}`);
-                                    if (checkbox) {
-                                        checkbox.checked = true;
-                                    }
-                                }
-                            });
-                            
-                            // Trigger update to show pills
-                            const firstCheckbox = document.querySelector(`#edit_${field.id}_container ~ .dropdown-menu .response-checkbox`);
-                            if (firstCheckbox) {
-                                firstCheckbox.dispatchEvent(new Event('change'));
-                            }
-                        }
-                    } else {
-                        // Handle single-select reference
-                        const newSelectElement = document.getElementById(`edit_${field.id}`);
-                        if (newSelectElement && fieldValue) {
-                            // Convert stored concept ID back to display format
-                            const { index } = appState.getState();
-                            const matchingFile = Object.keys(index).find(fileName => 
-                                fileName.replace('.json', '') === fieldValue
-                            );
-                            if (matchingFile) {
-                                const displayValue = formatConceptDisplay(matchingFile);
-                                newSelectElement.value = displayValue;
-                            }
-                        }
-                    }
-                }, 0);
+                selectElement.outerHTML = createReferenceDropdown(field, 'edit_', fieldValue);
+                // Note: All dropdown population, event setup, and value setting is now handled
+                // asynchronously within createReferenceDropdown to avoid timing issues
             }
             editFields.appendChild(fieldRow);
         } else {

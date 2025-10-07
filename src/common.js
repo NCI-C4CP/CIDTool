@@ -257,100 +257,251 @@ export const removeEventListeners = (element) => {
 
 /**
  * Creates an HTML dropdown for selecting reference concepts
- * @param {Object} field - Field configuration object with referencesType property
- * @param {string} field.id - The field ID for HTML elements
+ * @param {Object} field - The field configuration object
  * @param {string} field.referencesType - The type of concepts to reference
  * @param {boolean} field.required - Whether the field is required
- * @param {string} prefix - Optional prefix for field IDs (e.g., 'edit_')
- * @returns {string} HTML string for the dropdown element
+ * @param {string} [prefix=''] - Optional prefix for field ID
+ * @param {*} [initialValue=null] - Initial value to set after loading
+ * @returns {string} HTML string for the dropdown
  */
-export const createReferenceDropdown = (field, prefix = '') => {
-    const { objects } = appState.getState();
-    const referencedConcepts = [];
+export const createReferenceDropdown = (field, prefix = '', initialValue = null) => {
+    
     const targetType = field.referencesType;
-    
-    // Find all matching concept types from the objects
-    for (const [fileName, conceptType] of Object.entries(objects)) {
-        if (conceptType === targetType) {
-            const displayValue = formatConceptDisplay(fileName);
-
-            referencedConcepts.push({
-                id: `${displayValue}`
-            });
-        }
-    }
-    
-    // Sort concepts for better UX
-    referencedConcepts.sort((a, b) => a.id.localeCompare(b.id));
-    
     const fieldId = prefix ? `${prefix}${field.id}` : field.id;
     
-    if (referencedConcepts.length === 0) {
-        return `
-            <select class="form-select" id="${fieldId}" ${field.required ? 'required' : ''} disabled>
-                <option value="">No ${targetType} concepts available</option>
-            </select>
-            <div class="form-text text-warning">You need to create a ${targetType} concept first</div>
-        `;
-    }
-    else if (targetType === 'RESPONSE') {
-        return `
-            <div class="dropdown-container">
-                <div class="form-control d-flex flex-wrap align-items-center" 
-                    id="${fieldId}_container" role="button" data-bs-toggle="dropdown" 
-                    aria-expanded="false">
-                    <span class="dropdown-text">Select Responses</span>
-                </div>
-                
-                <div class="dropdown-menu p-2 w-100" aria-labelledby="${fieldId}_container">
-                    <div class="response-options" style="max-height: 200px; overflow-y: auto;">
-                        ${referencedConcepts.map(option => `
-                            <div class="form-check">
-                                <input class="form-check-input response-checkbox" type="checkbox" 
-                                    value="${option.id}" id="${fieldId}_${option.id}">
-                                <label class="form-check-label w-100" for="${fieldId}_${option.id}">
-                                    ${option.id}
-                                </label>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-                <div id="${fieldId}_pills" class="selected-pills d-flex flex-wrap mt-2"></div>
-                <input type="hidden" id="${fieldId}" value="[]">
-            </div>
-            <style>
-                .selected-pills { 
-                    gap: 5px; 
-                    min-height: 30px;
-                }
-                .response-pill {
-                    background: #e9ecef;
-                    padding: 2px 8px;
-                    border-radius: 12px;
-                    font-size: 0.85em;
-                    display: inline-flex;
-                    align-items: center;
-                    margin-bottom: 4px;
-                }
-                .pill-remove {
-                    margin-left: 5px;
-                    cursor: pointer;
-                    font-size: 1.2em;
-                    line-height: 0.7;
-                }
-            </style>
-        `;
-    }
-    
-    return `
-        <select class="form-select" id="${fieldId}" ${field.required ? 'required' : ''}>
-            <option value="">-- Select a ${targetType} concept --</option>
-            ${referencedConcepts.map(concept => 
-                `<option value="${concept.id}">${concept.id}</option>`
-            ).join('')}
+    // Create loading placeholder initially
+    let dropdownHTML = `
+        <select class="form-select" id="${fieldId}" ${field.required ? 'required' : ''} disabled>
+            <option value="">Loading ${targetType} concepts...</option>
         </select>
+        <div class="form-text text-info">Fetching available concepts...</div>
     `;
+    
+    // Asynchronously load concepts and update dropdown
+    loadConceptsForDropdown(fieldId, targetType, field.required, initialValue);
+    
+    return dropdownHTML;
 };
+
+/**
+ * Asynchronously loads concepts for a dropdown and updates the UI
+ * @param {string} fieldId - The field ID to update
+ * @param {string} targetType - The concept type to load
+ * @param {boolean} isRequired - Whether the field is required
+ * @param {*} initialValue - Initial value to set after loading
+ */
+const loadConceptsForDropdown = async (fieldId, targetType, isRequired, initialValue = null) => {
+    try {
+        const { getConceptsByType } = await import('./api.js');
+        const conceptFiles = await getConceptsByType(targetType);
+        
+        const referencedConcepts = conceptFiles?.files.map(file => {
+            const fileName = file.name;
+            const displayValue = formatConceptDisplay(fileName);
+            return { id: displayValue };
+        }) || [];
+        
+        // Sort concepts for better UX
+        referencedConcepts.sort((a, b) => a.id.localeCompare(b.id));
+        
+        // Update the dropdown element
+        const selectElement = document.getElementById(fieldId);
+        const helpTextElement = selectElement?.nextElementSibling;
+        
+        if (!selectElement) return; // Element not found, likely unmounted
+        
+        if (referencedConcepts.length === 0) {
+            selectElement.innerHTML = `<option value="">No ${targetType} concepts available</option>`;
+            selectElement.disabled = true;
+            if (helpTextElement) {
+                helpTextElement.className = 'form-text text-warning';
+                helpTextElement.textContent = `You need to create a ${targetType} concept first`;
+            }
+            return;
+        }
+        
+        // Handle RESPONSE type specially
+        if (targetType === 'RESPONSE') {
+            updateResponseDropdown(fieldId, referencedConcepts, initialValue);
+        } else {
+            updateStandardDropdown(fieldId, referencedConcepts, isRequired, initialValue);
+        }
+        
+        if (helpTextElement) {
+            helpTextElement.remove();
+        }
+        
+    } catch (error) {
+        console.error('Error loading concepts for dropdown:', error);
+        const selectElement = document.getElementById(fieldId);
+        const helpTextElement = selectElement?.nextElementSibling;
+        
+        if (selectElement) {
+            selectElement.innerHTML = `<option value="">Error loading ${targetType} concepts</option>`;
+            selectElement.disabled = true;
+        }
+        if (helpTextElement) {
+            helpTextElement.className = 'form-text text-danger';
+            helpTextElement.textContent = 'Failed to load concepts. Please try again.';
+        }
+    }
+};
+
+/**
+ * Updates a standard dropdown with concepts
+ */
+const updateStandardDropdown = (fieldId, referencedConcepts, isRequired, initialValue = null) => {
+    const selectElement = document.getElementById(fieldId);
+    if (!selectElement) return;
+    
+    selectElement.innerHTML = `
+        <option value="">${isRequired ? 'Select a concept' : 'None (optional)'}</option>
+        ${referencedConcepts.map(option => `
+            <option value="${option.id}">${option.id}</option>
+        `).join('')}
+    `;
+    selectElement.disabled = false;
+    
+    // Set initial value if provided
+    if (initialValue) {
+        // Convert stored concept ID back to display format for edit mode
+        const { index } = appState.getState();
+        const matchingFile = Object.keys(index).find(fileName => 
+            fileName.replace('.json', '') === initialValue
+        );
+        if (matchingFile) {
+            const displayValue = formatConceptDisplay(matchingFile);
+            selectElement.value = displayValue;
+        } else {
+            // Fallback: try setting the raw value
+            selectElement.value = initialValue;
+        }
+    }
+};
+
+/**
+ * Updates a RESPONSE type dropdown with multi-select functionality
+ */
+const updateResponseDropdown = (fieldId, referencedConcepts, initialValue = null) => {
+    const selectElement = document.getElementById(fieldId);
+    if (!selectElement) return;
+    
+    const containerHTML = `
+        <div class="dropdown-container">
+            <div class="form-control d-flex flex-wrap align-items-center" 
+                id="${fieldId}_container" role="button" data-bs-toggle="dropdown" 
+                aria-expanded="false">
+                <span class="dropdown-text">Select Responses</span>
+            </div>
+            
+            <div class="dropdown-menu p-2 w-100" aria-labelledby="${fieldId}_container">
+                <div class="response-options" style="max-height: 200px; overflow-y: auto;">
+                    ${referencedConcepts.map(option => `
+                        <div class="form-check">
+                            <input class="form-check-input response-checkbox" type="checkbox" 
+                                value="${option.id}" id="${fieldId}_${option.id}">
+                            <label class="form-check-label w-100" for="${fieldId}_${option.id}">
+                                ${option.id}
+                            </label>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            <div id="${fieldId}_pills" class="selected-pills d-flex flex-wrap mt-2"></div>
+            <input type="hidden" id="${fieldId}" value="[]">
+        </div>
+    `;
+    
+    selectElement.outerHTML = containerHTML;
+    
+    // Setup response dropdown functionality
+    setupResponseDropdownEvents(fieldId);
+    
+    // Set initial values if provided (for RESPONSE multi-select)
+    if (initialValue && Array.isArray(initialValue)) {
+        setTimeout(() => {
+            const { index } = appState.getState();
+            initialValue.forEach(conceptId => {
+                // Convert concept ID to display format to find matching checkbox
+                const matchingFile = Object.keys(index).find(fileName => 
+                    fileName.replace('.json', '') === conceptId
+                );
+                if (matchingFile) {
+                    const displayValue = formatConceptDisplay(matchingFile);
+                    const checkbox = document.getElementById(`${fieldId}_${displayValue}`);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                }
+            });
+            
+            // Trigger update to show pills
+            updateResponseSelection(fieldId);
+        }, 50);
+    }
+};
+
+/**
+ * Sets up event handlers for response dropdown functionality
+ */
+const setupResponseDropdownEvents = (fieldId) => {
+    const container = document.getElementById(`${fieldId}_container`);
+    const pillsContainer = document.getElementById(`${fieldId}_pills`);
+    const hiddenInput = document.getElementById(fieldId);
+    const checkboxes = document.querySelectorAll(`input[id^="${fieldId}_"][type="checkbox"]`);
+    
+    if (!container || !pillsContainer || !hiddenInput) return;
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateResponseSelection(fieldId);
+        });
+    });
+};
+
+/**
+ * Updates the response selection display and hidden input
+ */
+const updateResponseSelection = (fieldId) => {
+    const pillsContainer = document.getElementById(`${fieldId}_pills`);
+    const hiddenInput = document.getElementById(fieldId);
+    const checkboxes = document.querySelectorAll(`input[id^="${fieldId}_"][type="checkbox"]:checked`);
+    
+    if (!pillsContainer || !hiddenInput) return;
+    
+    const selectedValues = Array.from(checkboxes).map(cb => cb.value);
+    
+    // Update pills display
+    pillsContainer.innerHTML = selectedValues.map(value => `
+        <span class="badge bg-secondary response-pill">
+            ${value}
+            <button type="button" class="btn-close btn-close-white ms-1" 
+                onclick="removeResponsePill('${fieldId}', '${value}')"></button>
+        </span>
+    `).join('');
+    
+    // Update hidden input
+    hiddenInput.value = JSON.stringify(selectedValues);
+    
+    // Update dropdown text
+    const container = document.getElementById(`${fieldId}_container`);
+    const dropdownText = container?.querySelector('.dropdown-text');
+    if (dropdownText) {
+        dropdownText.textContent = selectedValues.length > 0 
+            ? `${selectedValues.length} Response${selectedValues.length !== 1 ? 's' : ''} Selected`
+            : 'Select Responses';
+    }
+};
+
+// Make removeResponsePill globally available
+window.removeResponsePill = (fieldId, value) => {
+    const checkbox = document.getElementById(`${fieldId}_${value}`);
+    if (checkbox) {
+        checkbox.checked = false;
+        updateResponseSelection(fieldId);
+    }
+};
+
 
 /**
  * Validates form fields based on a template and populates payload

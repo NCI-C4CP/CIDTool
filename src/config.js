@@ -53,7 +53,7 @@ export const PAGINATION_CONFIG = {
  * Defines which files should be excluded from repository browsing
  */
 export const FILE_FILTERS = {
-    EXCLUDED_FILES: ['index.json', '.gitkeep', 'object.json', 'config.json']
+    EXCLUDED_FILES: ['index.json', '.gitkeep', 'config.json']
 };
 
 /**
