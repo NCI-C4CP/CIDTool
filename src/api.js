@@ -16,8 +16,8 @@ import { toBase64, isLocal, appState, fromBase64, isTokenError, showUserNotifica
  * @returns {string} The API base URL
  */
 const getApiBaseUrl = () => {
-    return isLocal() ? API_CONFIG.BASE_URL_LOCAL : API_CONFIG.BASE_URL;
-    //return API_CONFIG.BASE_URL;
+    // return isLocal() ? API_CONFIG.BASE_URL_LOCAL : API_CONFIG.BASE_URL;
+    return API_CONFIG.BASE_URL;
 };
 
 /**

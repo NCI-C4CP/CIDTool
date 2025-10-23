@@ -1,6 +1,6 @@
 import { isLocal, preventDefaults, executeWithAnimation, debounce, appState } from './common.js';
 import { CLIENT_ID, REDIRECT_URI, CLIENT_ID_LOCAL, REDIRECT_URI_LOCAL, DOM_ELEMENTS, PERFORMANCE_CONFIG } from './config.js';
-import { objectDropped } from "./files.js";
+import { objectDropped, setupImportModal } from "./files.js";
 
 /**
  * Adds click event listener to the login button for GitHub OAuth authentication
@@ -111,7 +111,25 @@ export const addEventDropClicked = () => {
 
         // Reset modal content and state
         if (dropZone) {
-            dropZone.innerHTML = "Drag & Drop File or Folder Here";
+            dropZone.innerHTML = `
+                Drag & Drop <span id="selectedTypeFileText">PRIMARY</span> Excel File Here
+            `;
+        }
+
+        // Reset concept type selector to PRIMARY
+        const conceptTypeSelect = document.getElementById('conceptTypeSelect');
+        if (conceptTypeSelect) {
+            conceptTypeSelect.value = 'PRIMARY';
+            // Update the text elements
+            document.querySelectorAll('#selectedTypeText, #selectedTypeFileText, #selectedTypeFileText2').forEach(el => {
+                if (el) el.textContent = 'PRIMARY';
+            });
+        }
+
+        // Hide action buttons
+        const actionButtons = document.getElementById('action-buttons');
+        if (actionButtons) {
+            actionButtons.style.display = 'none';
         }
 
         if (remoteSaveButton) {
@@ -125,6 +143,11 @@ export const addEventDropClicked = () => {
         }
 
         importModal.show();
+        
+        // Set up enhanced import modal functionality after it's shown
+        setTimeout(() => {
+            setupImportModal();
+        }, 100);
     });
 };
 
