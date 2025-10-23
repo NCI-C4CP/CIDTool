@@ -319,7 +319,7 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
             }
 
             const { index } = appState.getState();
-            const existingKeys = Object.values(index);
+            const existingKeys = Object.values(index._files).map(file => file.key);
             const keyExists = existingKeys.some(existingKey => 
                 existingKey.toLowerCase() === key.toLowerCase()
             );

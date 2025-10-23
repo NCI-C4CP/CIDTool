@@ -203,6 +203,7 @@ export const addEventOpenRepoButtons = (repos, renderRepoContent) => {
  * @param {Function} directoryBack - Function to navigate back
  * @param {Function} renderConfigModal - Function to render config modal
  * @param {Function} handleDownloadRepo - Function to handle repo download
+ * @param {Function} handleRebuildIndex - Function to handle index rebuilding
  */
 export const addEventSearchBarControls = (
     renderFileList, 
@@ -211,7 +212,8 @@ export const addEventSearchBarControls = (
     refreshHomePage, 
     directoryBack, 
     renderConfigModal, 
-    handleDownloadRepo
+    handleDownloadRepo,
+    handleRebuildIndex
 ) => {
     // Search input event listener with debouncing for improved performance
     const searchInput = document.getElementById('searchFiles');
@@ -264,6 +266,14 @@ export const addEventSearchBarControls = (
     if (configButton) {
         configButton.addEventListener('click', () => {
             renderConfigModal();
+        });
+    }
+
+    // Rebuild index button
+    const rebuildIndexButton = document.getElementById('rebuildIndexButton');
+    if (rebuildIndexButton) {
+        rebuildIndexButton.addEventListener('click', async () => {
+            await handleRebuildIndex(refreshHomePage);
         });
     }
 

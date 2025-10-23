@@ -1,4 +1,4 @@
-import { getFiles } from './api.js';
+import { getFiles, getConceptsByType } from './api.js';
 
 /**
  * Displays an error message to the user via alert
@@ -292,8 +292,7 @@ export const createReferenceDropdown = (field, prefix = '', initialValue = null)
  */
 const loadConceptsForDropdown = async (fieldId, targetType, isRequired, initialValue = null) => {
     try {
-        const { getConceptsByType } = await import('./api.js');
-        const conceptFiles = await getConceptsByType(targetType);
+        const conceptFiles = getConceptsByType(targetType);
         
         const referencedConcepts = conceptFiles?.files.map(file => {
             const fileName = file.name;
@@ -366,7 +365,7 @@ const updateStandardDropdown = (fieldId, referencedConcepts, isRequired, initial
     if (initialValue) {
         // Convert stored concept ID back to display format for edit mode
         const { index } = appState.getState();
-        const matchingFile = Object.keys(index).find(fileName => 
+        const matchingFile = Object.keys(index._files || {}).find(fileName => 
             fileName.replace('.json', '') === initialValue
         );
         if (matchingFile) {
@@ -423,7 +422,7 @@ const updateResponseDropdown = (fieldId, referencedConcepts, initialValue = null
             const { index } = appState.getState();
             initialValue.forEach(conceptId => {
                 // Convert concept ID to display format to find matching checkbox
-                const matchingFile = Object.keys(index).find(fileName => 
+                const matchingFile = Object.keys(index._files || {}).find(fileName => 
                     fileName.replace('.json', '') === conceptId
                 );
                 if (matchingFile) {
@@ -593,7 +592,8 @@ export const formatConceptDisplay = (fileName) => {
     
     const { index } = appState.getState();
     const conceptId = fileName.replace('.json', '');
-    const key = index?.[fileName] || '';
+    const fileData = index._files?.[fileName];
+    const key = fileData?.key || '';
     
     return key ? `${key} - ${conceptId}` : conceptId;
 };

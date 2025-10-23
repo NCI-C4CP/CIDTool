@@ -16,8 +16,8 @@ import { toBase64, isLocal, appState, fromBase64, isTokenError, showUserNotifica
  * @returns {string} The API base URL
  */
 const getApiBaseUrl = () => {
-    // return isLocal() ? API_CONFIG.BASE_URL_LOCAL : API_CONFIG.BASE_URL;
-    return API_CONFIG.BASE_URL;
+    return isLocal() ? API_CONFIG.BASE_URL_LOCAL : API_CONFIG.BASE_URL;
+    // return API_CONFIG.BASE_URL;
 };
 
 /**
@@ -421,25 +421,33 @@ export const getConfigurationSettings = async () => {
 };
 
 /**
- * Retrieves concepts by their object type using GitHub Search API
+ * Retrieves concepts by their object type from the index
+ * Uses the pre-built search index from index.json for instant results
+ * @todo THIS ISN'T A LIVE API CALL
  * 
- * @async
  * @function getConceptsByType
  * @param {string} conceptType - The concept type to search for (e.g., 'PRIMARY', 'SECONDARY', 'RESPONSE')
  * 
- * @returns {Promise<Object>} API response containing files that match the concept type
- * @throws {Error} Throws error if search fails
+ * @returns {Object} Object containing files array that match the concept type
+ * 
+ * @example
+ * const result = getConceptsByType('PRIMARY');
+ * // Returns: { files: [{ name: '164242418.json', key: 'Primary3', object_type: 'PRIMARY' }, ...] }
  */
-export const getConceptsByType = async (conceptType) => {
-    const { owner, repoName } = appState.getState();
+export const getConceptsByType = (conceptType) => {
+    const { index } = appState.getState();
     
-    return await makeApiRequest(
-        `searchFiles&owner=${owner}&repo=${repoName}&query="object_type": "${conceptType}"`,
-        { 
-            method: 'GET' 
-        },
-        'Get concepts by type'
-    );
+    // Get list of filenames from the pre-built type index
+    const filenames = index._search?.by_type?.[conceptType] || [];
+    
+    // Return in a format compatible with the old API response
+    return {
+        files: filenames.map(filename => ({
+            name: filename,
+            // Include metadata from _files for additional context
+            ...index._files?.[filename]
+        }))
+    };
 };
 
 /**
@@ -461,6 +469,31 @@ export const checkReferences = async (conceptId) => {
             method: 'GET' 
         },
         'Check concept references'
+    );
+};
+
+/**
+ * Rebuilds the index.json file in the repository
+ * 
+ * @async
+ * @function rebuildIndex
+ * 
+ * @returns {Promise<Object>} API response confirming index rebuild
+ * @throws {Error} Throws error if index rebuild fails
+ */
+export const rebuildIndex = async () => {
+    const { owner, repoName } = appState.getState();
+    
+    return await makeApiRequest(
+        'rebuildIndex',
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                owner,
+                repo: repoName
+            })
+        },
+        'Rebuild index'
     );
 };
 

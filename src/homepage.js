@@ -12,8 +12,8 @@
  * @requires events - UI event handling functions
  */
 
-import { appState, executeWithAnimation, fromBase64, showUserNotification, getErrorMessage } from './common.js';
-import { getFiles, getRepoContents, getUserRepositories, getConfigurationSettings } from './api.js';
+import { appState, executeWithAnimation, fromBase64, showUserNotification, getErrorMessage, showAnimation, hideAnimation } from './common.js';
+import { getFiles, getRepoContents, getUserRepositories, getConfigurationSettings, rebuildIndex } from './api.js';
 import { renderAddModal, renderDeleteModal, renderAddFolderModal, renderViewModal, renderConfigModal } from './modals.js';
 import { generateSpreadsheet } from './files.js';
 import { structureFiles } from './dictionary.js';
@@ -163,7 +163,8 @@ const renderSearchBar = () => {
         refreshHomePage,
         directoryBack,
         renderConfigModal,
-        handleDownloadRepo
+        handleDownloadRepo,
+        handleRebuildIndex
     );
 };
 
@@ -200,7 +201,9 @@ const renderFileList = (searchTerm = '') => {
 
     // Filter files based on the search term
     const filteredFiles = files.filter(file => {
-        const keyValue = index[file.name] || '';
+        // Access key from new index structure: index._files[filename].key
+        const fileData = index._files?.[file.name];
+        const keyValue = fileData?.key || '';
         const searchLower = searchTerm.toLowerCase();
         const fileNameWithoutExtension = getFileNameWithoutExtension(file.name).toLowerCase();
 
@@ -238,7 +241,9 @@ const renderFileList = (searchTerm = '') => {
 
     // Generate HTML for the file list using templates
     fileListDiv.innerHTML = filesToDisplay.map(file => {
-        const keyValue = index[file.name] || '';
+        // Access key from new index structure: index._files[filename].key
+        const fileData = index._files?.[file.name];
+        const keyValue = fileData?.key || '';
         const displayName = getFileNameWithoutExtension(file.name);
 
         // Use appropriate template based on file type
@@ -325,4 +330,46 @@ const handleDownloadRepo = async () => {
 
     let structuredData = structureFiles(jsonDataArray);
     generateSpreadsheet(structuredData);
+};
+
+/**
+ * Handles index rebuild functionality
+ * 
+ * @async
+ * @function handleRebuildIndex
+ * @param {Function} refreshHomePage - Function to refresh the homepage after rebuild
+ * @description Calls the backend API to rebuild the index.json file for the current repository
+ * 
+ * @throws {Error} If rebuild fails or API call fails
+ */
+export const handleRebuildIndex = async (refreshHomePage) => {
+    try {
+        // Confirm with user before rebuilding
+        const confirmed = confirm('Are you sure you want to rebuild the index.json file? This will scan all concept files and regenerate the index.');
+        
+        if (!confirmed) {
+            return;
+        }
+
+        // Show loading animation
+        showAnimation();
+        
+        // Call the rebuild API
+        await rebuildIndex();
+        
+        // Show success message
+        showUserNotification('success', 'Index rebuilt successfully!');
+        
+        // Refresh the page to show updated index
+        if (refreshHomePage) {
+            await refreshHomePage();
+        }
+        
+    } catch (error) {
+        console.error('Error rebuilding index:', error);
+        showUserNotification('error', `Failed to rebuild index: ${getErrorMessage(error)}`);
+    } finally {
+        // Hide loading animation
+        hideAnimation();
+    }
 };

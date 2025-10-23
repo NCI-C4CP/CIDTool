@@ -6,6 +6,10 @@ import { addEventFileDrop, addEventDropClicked, addEventHomeIconClick } from "./
 import { WELCOME_TEMPLATES } from "./src/templates.js";
 import { CONFIG, PAGINATION_CONFIG, DOM_ELEMENTS } from "./src/config.js";
 
+// Expose appState to window for debugging in console
+// Usage in console: appState.getState() or appState.setState({key: value})
+window.appState = appState;
+
 /**
  * Initializes the application when the window loads
  */

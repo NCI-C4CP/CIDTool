@@ -551,6 +551,9 @@ export const HOMEPAGE_TEMPLATES = {
                     <button id="configButton" class="btn btn-outline-secondary me-2">
                         <i class="bi bi-gear"></i> Configure
                     </button>
+                    <button id="rebuildIndexButton" class="btn btn-outline-warning me-2">
+                        <i class="bi bi-arrow-repeat"></i> Rebuild
+                    </button>
                     <button id="downloadRepo" class="btn btn-primary">
                         <i class="bi bi-download"></i> Download
                     </button>
