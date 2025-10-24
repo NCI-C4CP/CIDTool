@@ -130,9 +130,9 @@ export const toBase64 = (string) => {
 
 export const fromBase64 = (string) => {
     try {
-        // Handle null/undefined strings
-        if (!string) {
-            throw new Error('Base64 string is empty or null');
+        // Handle null/undefined/non-string inputs
+        if (!string || typeof string !== 'string') {
+            throw new Error('Base64 string is empty, null, or not a string');
         }
         
         // Clean the base64 string by removing whitespace and newlines
@@ -147,6 +147,7 @@ export const fromBase64 = (string) => {
         return atob(cleanedString);
     } catch (error) {
         console.error('Error decoding base64 string:', error);
+        console.error('Original string type:', typeof string);
         console.error('Original string:', string);
         throw new Error(`Failed to decode base64: ${error.message}`);
     }

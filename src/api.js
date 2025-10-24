@@ -410,13 +410,24 @@ export const getConfigurationSettings = async () => {
             'Get configuration settings'
         );
         
+        // Validate response structure before attempting to decode
+        if (!responseData?.data?.content || typeof responseData.data.content !== 'string') {
+            console.warn('Configuration file response missing content, using defaults');
+            return;
+        }
+        
         const configContent = fromBase64(responseData.data.content);
         const config = JSON.parse(configContent);
         
         appState.setState({ config });
     } catch (error) {
         // Configuration is optional, so we don't want to show user errors for missing config
-        console.warn('Configuration file not found or invalid, using defaults');
+        // Check if it's a 404 (file not found) or other expected error
+        if (error.status === 404) {
+            console.warn('Configuration file not found, using defaults');
+        } else {
+            console.warn('Configuration file invalid or cannot be loaded, using defaults:', error.message);
+        }
     }
 };
 
