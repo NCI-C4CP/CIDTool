@@ -203,6 +203,9 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
 
         // Use template for concept type selector and form containers
         body.innerHTML = `
+            <div class="alert alert-light border mb-3">
+                <small class="text-muted"><span class="text-danger">*</span> indicates required field</small>
+            </div>
             ${MODAL_TEMPLATES.conceptTypeSelector(MODAL_CONFIG.CONCEPT_TYPES)}
             ${MODAL_TEMPLATES.dynamicFieldContainers()}
         `;
@@ -242,12 +245,14 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
                         fieldHTML = createReferenceDropdown(field);
                         break;
                     default:
-                        fieldHTML = `<input type="${field.type}" class="form-control" id="${field.id}">`;
+                        fieldHTML = `<input type="${field.type}" class="form-control" id="${field.id}" ${field.required ? 'required' : ''}>`;
                 }
 
                 fieldRow.innerHTML = `
                     <div class="col-4">
-                        <label for="${field.id}" class="col-form-label">${field.label}</label>
+                        <label for="${field.id}" class="col-form-label">
+                            ${field.label}${field.required ? ' <span class="text-danger">*</span>' : ''}
+                        </label>
                     </div>
                     <div class="col-8">
                         ${fieldHTML}

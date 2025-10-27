@@ -527,36 +527,65 @@ export const HOMEPAGE_TEMPLATES = {
      * @returns {string} HTML template for search bar and action buttons
      */
     searchBarAndControls: () => `
+        <style>
+            /* Responsive button styles */
+            @media (max-width: 1200px) {
+                .action-buttons .btn {
+                    padding: 0.375rem 0.5rem;
+                    font-size: 0.875rem;
+                }
+            }
+            @media (max-width: 992px) {
+                .action-buttons {
+                    flex-wrap: wrap !important;
+                    gap: 0.5rem;
+                }
+                .action-buttons .btn {
+                    margin-right: 0 !important;
+                    margin-bottom: 0.5rem;
+                }
+            }
+            @media (max-width: 768px) {
+                .action-buttons .btn-text {
+                    display: none;
+                }
+                .action-buttons .btn {
+                    padding: 0.375rem 0.75rem;
+                }
+            }
+        </style>
         <div class="container mt-5">
             <!-- Top bar with search and add button -->
-            <div class="row mb-3">
-                <div class="col-4">
+            <div class="row mb-3 g-3">
+                <div class="col-12 col-lg-4">
                     <div class="d-flex align-items-center">
-                        <input type="text" id="searchFiles" class="form-control form-control me-2 flex-grow-1" placeholder="Search files...">
-                        <button id="refreshButton" class="btn btn-outline-secondary btn me-2 flex-shrink-0">
+                        <input type="text" id="searchFiles" class="form-control me-2 flex-grow-1" placeholder="Search files...">
+                        <button id="refreshButton" class="btn btn-outline-secondary me-2 flex-shrink-0" title="Refresh">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
-                        <button id="backButton" class="btn btn-outline-secondary flex-shrink-0">
+                        <button id="backButton" class="btn btn-outline-secondary flex-shrink-0" title="Go Back">
                             <i class="bi bi-arrow-left"></i>
                         </button>
                     </div>
                 </div>
-                <div class="col-8 d-flex justify-content-end">
-                    <button id="addFolder" class="btn btn-secondary me-2">
-                        <i class="bi bi-folder-plus"></i> Add Folder
-                    </button>
-                    <button id="addFile" class="btn btn-primary me-2">
-                        <i class="bi bi-plus-lg"></i> Add Concept
-                    </button>
-                    <button id="configButton" class="btn btn-outline-secondary me-2">
-                        <i class="bi bi-gear"></i> Configure
-                    </button>
-                    <button id="rebuildIndexButton" class="btn btn-outline-warning me-2">
-                        <i class="bi bi-arrow-repeat"></i> Rebuild
-                    </button>
-                    <button id="downloadRepo" class="btn btn-primary">
-                        <i class="bi bi-download"></i> Download
-                    </button>
+                <div class="col-12 col-lg-8 d-flex justify-content-lg-end">
+                    <div class="action-buttons d-flex w-100 w-lg-auto">
+                        <button id="addFolder" class="btn btn-secondary me-2" title="Add Folder">
+                            <i class="bi bi-folder-plus"></i><span class="btn-text ms-1">Add Folder</span>
+                        </button>
+                        <button id="addFile" class="btn btn-primary me-2" title="Add Concept">
+                            <i class="bi bi-plus-lg"></i><span class="btn-text ms-1">Add Concept</span>
+                        </button>
+                        <button id="configButton" class="btn btn-outline-secondary me-2" title="Configure">
+                            <i class="bi bi-gear"></i><span class="btn-text ms-1">Configure</span>
+                        </button>
+                        <button id="rebuildIndexButton" class="btn btn-outline-warning me-2" title="Rebuild Index">
+                            <i class="bi bi-arrow-repeat"></i><span class="btn-text ms-1">Rebuild</span>
+                        </button>
+                        <button id="downloadRepo" class="btn btn-primary" title="Download Repository">
+                            <i class="bi bi-download"></i><span class="btn-text ms-1">Download</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
