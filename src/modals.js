@@ -317,9 +317,9 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
             const key = document.getElementById('key').value.trim();
             const keyInput = document.getElementById('key');
 
-            // Validate required fields
+            // Validate mandatory fields
             if (!conceptId || !key) {
-                alert('Concept ID and Key are required.');
+                alert('Concept ID and Key are mandatory.');
                 return;
             }
 
@@ -555,7 +555,7 @@ export const renderDeleteModal = async (event) => {
                 ]);
             } else {
                 // No references found, show normal confirmation
-                body.innerHTML = MODAL_TEMPLATES.confirmationDialog('Confirmation Required', 'Are you sure you want to delete this concept? This action cannot be undone.', file);
+                body.innerHTML = MODAL_TEMPLATES.confirmationDialog('Confirmation Needed', 'Are you sure you want to delete this concept? This action cannot be undone.', file);
 
                 footer.innerHTML = MODAL_TEMPLATES.footer([
                     { text: 'Cancel', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' },
@@ -1061,7 +1061,7 @@ export const renderAddFolderModal = () => {
 
         // Validate the folder name
         if (!folderName) {
-            alert('Folder Name is required.');
+            alert('Folder Name is mandatory.');
             return;
         }
 
@@ -1328,7 +1328,7 @@ async function saveEditedConcept(originalContent, typeConfig, file) {
                 : (!value || value.trim() === '');                 // Other field types (text, concept)
             
             if (isEmpty && !field.required) {
-                // Remove the key from the object for non-required empty fields
+                // Remove the key from the object for non-mandatory empty fields
                 delete updatedContent[field.id];
             } else {
                 // Update the content with the new value

@@ -262,7 +262,7 @@ export const addFolder = async (folderName) => {
  * @function updateFile
  * @param {string} fileName - Name of the file to update
  * @param {string} content - New file content as string
- * @param {string} sha - Current SHA hash of the file (required for updates)
+ * @param {string} sha - Current SHA hash of the file (needed for updates)
  * @returns {Promise<Object>} GitHub API response with updated file details
  * @throws {Error} Throws error if file update fails
  * 
@@ -298,7 +298,7 @@ export const updateFile = async (fileName, content, sha) => {
  * @async
  * @function deleteFile
  * @param {string} fileName - Name of the file to delete
- * @param {string} sha - Current SHA hash of the file (required for deletion)
+ * @param {string} sha - Current SHA hash of the file (needed for deletion)
  * 
  * @returns {Promise<Object>} GitHub API response confirming deletion
  * @throws {Error} Throws error if file deletion fails
