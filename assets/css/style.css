@@ -49,7 +49,6 @@ button:disabled.text-muted {
 }
 
 .response-pill {
-    background: #e9ecef !important;
     padding: 2px 8px;
     border-radius: 10px;
     display: flex;
@@ -73,4 +72,125 @@ button:disabled.text-muted {
 .response-options .form-check-label {
     cursor: pointer;
     padding: 0.25rem 0;
+}
+
+/* ============================================
+   Concept Type Color Scheme
+   Consistent colors across templates and UI
+   ============================================ */
+
+/* PRIMARY - Blue */
+.concept-type-primary,
+.badge-primary-concept {
+    background-color: #4472C4 !important;
+    color: white !important;
+}
+.concept-type-primary-light,
+.bg-primary-concept-light {
+    background-color: #D6E2F7 !important;
+}
+.border-primary-concept {
+    border-color: #4472C4 !important;
+}
+.text-primary-concept {
+    color: #4472C4 !important;
+}
+
+/* SECONDARY - Green */
+.concept-type-secondary,
+.badge-secondary-concept {
+    background-color: #70AD47 !important;
+    color: white !important;
+}
+.concept-type-secondary-light,
+.bg-secondary-concept-light {
+    background-color: #E2F0D9 !important;
+}
+.border-secondary-concept {
+    border-color: #70AD47 !important;
+}
+.text-secondary-concept {
+    color: #70AD47 !important;
+}
+
+/* SOURCE - Gold */
+.concept-type-source,
+.badge-source-concept {
+    background-color: #FFC000 !important;
+    color: white !important;
+}
+.concept-type-source-light,
+.bg-source-concept-light {
+    background-color: #FFF2CC !important;
+}
+.border-source-concept {
+    border-color: #FFC000 !important;
+}
+.text-source-concept {
+    color: #FFC000 !important;
+}
+
+/* QUESTION - Orange */
+.concept-type-question,
+.badge-question-concept {
+    background-color: #ED7D31 !important;
+    color: white !important;
+}
+.concept-type-question-light,
+.bg-question-concept-light {
+    background-color: #FCE4D6 !important;
+}
+.border-question-concept {
+    border-color: #ED7D31 !important;
+}
+.text-question-concept {
+    color: #ED7D31 !important;
+}
+
+/* RESPONSE - Purple */
+.concept-type-response,
+.badge-response-concept {
+    background-color: #7030A0 !important;
+    color: white !important;
+}
+.concept-type-response-light,
+.bg-response-concept-light {
+    background-color: #E4DFEC !important;
+}
+.border-response-concept {
+    border-color: #7030A0 !important;
+}
+.text-response-concept {
+    color: #7030A0 !important;
+}
+
+/* Utility class for concept type badges */
+.concept-badge {
+    display: inline-block;
+    padding: 0.25em 0.6em;
+    font-size: 0.75em;
+    font-weight: 600;
+    border-radius: 0.375rem;
+    text-transform: uppercase;
+}
+
+/* Import summary concept type pills */
+.import-summary-type {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    margin: 0.25rem;
+}
+
+.import-summary-type .count {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-right: 0.5rem;
+}
+
+.import-summary-type .label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    opacity: 0.9;
 }

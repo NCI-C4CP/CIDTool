@@ -105,28 +105,16 @@ export const addEventDropClicked = () => {
             alert('Please open a repository first to use the import feature.');
             return;
         }
-        const dropZone = document.getElementById(DOM_ELEMENTS.DROP_ZONE_CONTENT);
+        
+        const dropZoneContent = document.getElementById(DOM_ELEMENTS.DROP_ZONE_CONTENT);
         const remoteSaveButton = document.getElementById(DOM_ELEMENTS.REMOTE_SAVE_BUTTON);
-        const saveButton = document.getElementById(DOM_ELEMENTS.SAVE_BUTTON);
 
         // Reset modal content and state
-        if (dropZone) {
-            dropZone.innerHTML = `
-                Drag & Drop <span id="selectedTypeFileText">PRIMARY</span> Excel File Here
-            `;
+        if (dropZoneContent) {
+            dropZoneContent.innerHTML = 'Drag & Drop Dictionary Excel File Here';
         }
 
-        // Reset concept type selector to PRIMARY
-        const conceptTypeSelect = document.getElementById('conceptTypeSelect');
-        if (conceptTypeSelect) {
-            conceptTypeSelect.value = 'PRIMARY';
-            // Update the text elements
-            document.querySelectorAll('#selectedTypeText, #selectedTypeFileText, #selectedTypeFileText2').forEach(el => {
-                if (el) el.textContent = 'PRIMARY';
-            });
-        }
-
-        // Hide action buttons
+        // Hide and reset action buttons
         const actionButtons = document.getElementById('action-buttons');
         if (actionButtons) {
             actionButtons.style.display = 'none';
@@ -136,15 +124,27 @@ export const addEventDropClicked = () => {
             remoteSaveButton.disabled = true;
             remoteSaveButton.hidden = true;
         }
-
-        if (saveButton) {
-            saveButton.disabled = true;
-            saveButton.hidden = true;
+        
+        // Hide validation errors and import summary from previous imports
+        const validationErrors = document.getElementById('validation-errors');
+        if (validationErrors) {
+            validationErrors.style.display = 'none';
+        }
+        
+        const importSummary = document.getElementById('import-summary');
+        if (importSummary) {
+            importSummary.style.display = 'none';
+        }
+        
+        // Reset file input
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput) {
+            fileInput.value = '';
         }
 
         importModal.show();
         
-        // Set up enhanced import modal functionality after it's shown
+        // Set up import modal functionality after it's shown
         setTimeout(() => {
             setupImportModal();
         }, 100);

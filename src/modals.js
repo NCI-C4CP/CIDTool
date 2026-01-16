@@ -12,10 +12,10 @@
  * @requires config - Modal configuration constants
  */
 
-import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, validateFormFields, showUserNotification, formatConceptDisplay, extractConcept } from './common.js';
+import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, initReferenceDropdown, validateFormFields, showUserNotification, formatConceptDisplay, extractConcept } from './common.js';
 import { addFile, deleteFile, addFolder, getConcept, getFiles, updateFile, checkReferences } from './api.js';
 import { refreshHomePage } from './homepage.js';
-import { MODAL_CONFIG } from './config.js';
+import { MODAL_CONFIG, CONCEPT_TYPE_COLORS } from './config.js';
 import { MODAL_TEMPLATES, FORM_UTILS } from './templates.js';
 
 /**
@@ -71,10 +71,16 @@ const ModalUtils = {
 
     /**
      * Hides the modal and cleans up Bootstrap modal instance
+     * Blurs the active element first to avoid aria-hidden focus warning
      * @function hideModal
      * @param {HTMLElement} modal - Modal element to hide
      */
     hideModal(modal) {
+        // Blur the currently focused element to avoid aria-hidden warning
+        if (document.activeElement && modal.contains(document.activeElement)) {
+            document.activeElement.blur();
+        }
+        
         const modalInstance = bootstrap.Modal.getInstance(modal);
         if (modalInstance) {
             modalInstance.hide();
@@ -260,6 +266,11 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
                 `;
                 
                 templateFields.appendChild(fieldRow);
+                
+                // Initialize reference dropdowns after they're in the DOM
+                if (field.type === 'reference') {
+                    initReferenceDropdown(field.id);
+                }
             });
         };
 
@@ -605,10 +616,20 @@ export const renderDeleteModal = async (event) => {
 export const renderViewModal = async (event) => {
     showAnimation();
     
+    // Declare modal elements outside try block so they're available in catch
+    let modal, header, body, footer;
+    let file = null;
+    
     try {
         const button = event.target;
-        const file = button.getAttribute('data-bs-file');
-        const { modal, header, body, footer } = ModalUtils.getModalElements();
+        file = button.getAttribute('data-bs-file');
+        
+        // Validate file parameter early
+        if (!file) {
+            throw new Error('No file specified to view');
+        }
+        
+        ({ modal, header, body, footer } = ModalUtils.getModalElements());
         
         const { content } = await getFileContent(file);
         
@@ -627,11 +648,12 @@ export const renderViewModal = async (event) => {
         modal.isEditMode = false;
 
         const renderModalContent = () => {
-            // Render header with badge showing concept type
+            // Render header with badge showing concept type (color-coded)
+            const typeColor = CONCEPT_TYPE_COLORS[conceptType]?.hex || '#6c757d';
             header.innerHTML = `
                 <h5 class="modal-title d-flex align-items-center">
                     ${modal.isEditMode ? 'Edit' : 'View'} Concept 
-                    <span class="badge bg-primary ms-2">${conceptType}</span>
+                    <span class="badge ms-2" style="background-color: ${typeColor}; color: white;">${conceptType}</span>
                 </h5>
             `;
 
@@ -652,6 +674,14 @@ export const renderViewModal = async (event) => {
             
             // Add the container to the modal body
             body.appendChild(contentContainer);
+            
+            // Initialize any pending reference dropdowns now that they're in the DOM
+            if (contentContainer._pendingDropdowns) {
+                contentContainer._pendingDropdowns.forEach(({ fieldId, initialValue }) => {
+                    initReferenceDropdown(fieldId, initialValue);
+                });
+                delete contentContainer._pendingDropdowns;
+            }
             
             // Set up footer buttons based on mode
             if (modal.isEditMode) {
@@ -678,7 +708,8 @@ export const renderViewModal = async (event) => {
                 ]);
                 
                 // Add event listeners for view mode
-                document.getElementById('closeButton').addEventListener('click', () => {
+                document.getElementById('closeButton').addEventListener('click', (e) => {
+                    e.target.blur(); // Prevent aria-hidden focus warning
                     bootstrap.Modal.getInstance(modal).hide();
                 });
 
@@ -701,11 +732,23 @@ export const renderViewModal = async (event) => {
     } catch (error) {
         console.error('Error fetching file:', error);
         
+        // Try to get modal elements if not already available
+        if (!modal || !body || !footer) {
+            try {
+                ({ modal, header, body, footer } = ModalUtils.getModalElements());
+            } catch (modalError) {
+                // Can't show modal error, just log and return
+                console.error('Cannot display error in modal:', modalError);
+                showUserNotification('error', `Error loading concept: ${error.message}`);
+                return;
+            }
+        }
+        
         // Show user-friendly error message using template
-        body.innerHTML = MODAL_TEMPLATES.errorAlert('Error Loading Concept', error.message, `File: ${file}`);
+        body.innerHTML = MODAL_TEMPLATES.errorAlert('Error Loading Concept', error.message, file ? `File: ${file}` : '');
 
         footer.innerHTML = MODAL_TEMPLATES.footer([
-            { text: 'Close', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'onclick="bootstrap.Modal.getInstance(this.closest(\'.modal\')).hide()"' }
+            { text: 'Close', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'onclick="this.blur(); bootstrap.Modal.getInstance(this.closest(\'.modal\')).hide()"' }
         ]);        
         
         ModalUtils.showModal(modal);
@@ -776,7 +819,19 @@ function renderViewMode(container, content, typeConfig) {
     // Track which fields have been displayed
     const displayedFields = new Set();
     
-    // First, display fields according to the configuration
+    // Always show conceptID in Core Fields if it exists
+    if (content.conceptID) {
+        const conceptIdGroup = document.createElement('div');
+        conceptIdGroup.className = 'field-group';
+        conceptIdGroup.innerHTML = `
+            <div class="field-label">Concept ID</div>
+            <div class="field-value concept-id">${content.conceptID}</div>
+        `;
+        coreFields.appendChild(conceptIdGroup);
+        displayedFields.add('conceptID');
+    }
+    
+    // Display fields according to the configuration
     if (typeConfig.length > 0) {
         typeConfig.forEach(field => {
             // Only show fields that have values
@@ -794,20 +849,24 @@ function renderViewMode(container, content, typeConfig) {
                         coreFields.appendChild(fieldGroup);
                         break;
                     case 'reference':
+                        // Get color based on what type this reference points to
+                        const refColor = CONCEPT_TYPE_COLORS[field.referencesType]?.hex || '#6c757d';
+                        const badgeStyle = `background-color: ${refColor}; color: white;`;
+                        
                         if (Array.isArray(fieldValue) && fieldValue.length > 0) {
                             // Multi-select reference field - show each value as separate badge
                             fieldHTML = `<div class="field-value">${fieldValue.map(item => 
-                                `<span class="badge badge-reference me-1 mb-1">${item}</span>`
+                                `<span class="badge me-1 mb-1" style="${badgeStyle}">${item}</span>`
                             ).join('')}</div>`;
                         } else if (typeof fieldValue === 'string' && fieldValue.includes(',')) {
                             // Handle comma-separated string values - split and show as separate badges
                             const values = fieldValue.split(',').map(v => v.trim()).filter(v => v);
                             fieldHTML = `<div class="field-value">${values.map(item => 
-                                `<span class="badge badge-reference me-1 mb-1">${item}</span>`
+                                `<span class="badge me-1 mb-1" style="${badgeStyle}">${item}</span>`
                             ).join('')}</div>`;
                         } else {
                             // Single reference value
-                            fieldHTML = `<div class="field-value"><span class="badge badge-reference">${fieldValue}</span></div>`;
+                            fieldHTML = `<div class="field-value"><span class="badge" style="${badgeStyle}">${fieldValue}</span></div>`;
                         }
                         referenceFields.appendChild(fieldGroup);
                         break;
@@ -884,7 +943,22 @@ function renderEditMode(container, content, typeConfig) {
     
     // Render all configured fields using form utilities
     typeConfig.forEach(field => {
-        const fieldValue = content[field.id] !== undefined ? content[field.id] : '';
+        // Handle conceptId/conceptID case sensitivity (config uses conceptId, data uses conceptID)
+        let fieldValue = content[field.id];
+        if (fieldValue === undefined && field.id === 'conceptId') {
+            fieldValue = content['conceptID'];
+        }
+        fieldValue = fieldValue !== undefined ? fieldValue : '';
+        
+        // Debug logging for reference fields
+        if (field.type === 'reference') {
+            console.log(`Reference field "${field.id}": looking for value in content`, {
+                fieldId: field.id,
+                fieldValue: fieldValue,
+                contentKeys: Object.keys(content),
+                content: content
+            });
+        }
         
         // Handle reference fields specially (still need createReferenceDropdown)
         if (field.type === 'reference') {
@@ -894,11 +968,18 @@ function renderEditMode(container, content, typeConfig) {
             // Replace the select with reference dropdown using edit_ prefix
             const selectElement = fieldRow.querySelector('select');
             if (selectElement) {
-                selectElement.outerHTML = createReferenceDropdown(field, 'edit_', fieldValue);
-                // Note: All dropdown population, event setup, and value setting is now handled
-                // asynchronously within createReferenceDropdown to avoid timing issues
+                selectElement.outerHTML = createReferenceDropdown(field, 'edit_');
             }
             editFields.appendChild(fieldRow);
+            
+            // Store field info for later initialization (after container is in DOM)
+            if (!container._pendingDropdowns) {
+                container._pendingDropdowns = [];
+            }
+            container._pendingDropdowns.push({
+                fieldId: `edit_${field.id}`,
+                initialValue: fieldValue
+            });
         } else {
             // Use form utility for other field types
             const fieldHTML = FORM_UTILS.generateFormField(field, fieldValue, 'edit');
@@ -1018,7 +1099,8 @@ export const renderUploadModal = async (files) => {
 
         // add event listener for save button
         const closeButton = modal.querySelector('.btn-outline-secondary');
-        closeButton.addEventListener('click', async () => {
+        closeButton.addEventListener('click', async (e) => {
+            e.target.blur(); // Prevent aria-hidden focus warning
             bootstrap.Modal.getInstance(modal).hide();
 
             await refreshHomePage();

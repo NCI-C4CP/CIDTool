@@ -69,43 +69,33 @@
             </div>
         </div>
 
-        <!-- New Modal for Import Functionality -->
+        <!-- Modal for Import Functionality -->
         <div class="modal fade" tabindex="-1" id="importModal" data-bs-backdrop="static">
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <!-- Modal Header -->
                     <div class="modal-header">
-                        <h5 class="modal-title">Import Files or Folders</h5>
+                        <h5 class="modal-title">Import Dictionary</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
 
-                    <!-- Modal Body: Enhanced Import with Type Selection -->
+                    <!-- Modal Body -->
                     <div class="modal-body">
-                        <!-- Type Selection and Template Download Row -->
+                        <!-- Template Download -->
                         <div class="row mb-4">
-                            <div class="col-md-6">
-                                <label for="conceptTypeSelect" class="form-label">
-                                    <i class="bi bi-list-ul"></i> Select Concept Type to Import
-                                </label>
-                                <select class="form-select" id="conceptTypeSelect">
-                                    <option value="PRIMARY">PRIMARY Concepts</option>
-                                    <option value="SECONDARY">SECONDARY Concepts</option>
-                                    <option value="SOURCE">SOURCE Concepts</option>
-                                    <option value="QUESTION">QUESTION Concepts</option>
-                                    <option value="RESPONSE">RESPONSE Concepts</option>
-                                </select>
-                                <div class="form-text">Choose the type of concepts you want to import</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">
-                                    <i class="bi bi-download"></i> Download Template
-                                </label>
-                                <div class="d-grid">
+                            <div class="col-12">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1"><i class="bi bi-info-circle"></i> Import Format</h6>
+                                        <small class="text-muted">
+                                            Upload an Excel file with columns for all concept types: 
+                                            PRIMARY, SECONDARY, SOURCE, QUESTION, RESPONSE
+                                        </small>
+                                    </div>
                                     <button type="button" class="btn btn-outline-success" id="downloadTemplateBtn">
                                         <i class="bi bi-file-earmark-spreadsheet"></i> 
-                                        Download <span id="selectedTypeText">PRIMARY</span> Template
+                                        Download Template
                                     </button>
-                                    <div class="form-text">Get a properly formatted Excel template based on your configuration</div>
                                 </div>
                             </div>
                         </div>
@@ -116,10 +106,10 @@
                                 <div class="drop-zone-content">
                                     <i class="bi bi-cloud-arrow-up-fill display-1 text-primary"></i>
                                     <h5 id="drop-zone-content" class="card-title mt-3">
-                                        Drag & Drop <span id="selectedTypeFileText">PRIMARY</span> Excel File Here
+                                        Drag & Drop Dictionary Excel File Here
                                     </h5>
                                     <p class="text-muted">
-                                        Upload a .xlsx file with <span id="selectedTypeFileText2">PRIMARY</span> concept data
+                                        Upload a .xlsx file with your concept dictionary
                                         <br><small>or click to browse files</small>
                                     </p>
                                 </div>
@@ -129,24 +119,33 @@
 
                                 <!-- Action Buttons (shown after file upload) -->
                                 <div class="mt-3" id="action-buttons" style="display: none;">
-                                    <!-- Save Button, hidden to start -->
-                                    <button id="save-button" class="btn btn-primary me-2" hidden disabled>Generate Dictionary</button>
-
-                                    <!-- Remote Save, hidden to start-->
-                                    <button id="remote-save-button" class="btn btn-success me-2" hidden disabled>Review Import</button>
-                                    
-                                    <!-- Approve All Button for bulk operations -->
-                                    <button id="approve-all-button" class="btn btn-warning" hidden disabled>
-                                        <i class="bi bi-check-all"></i> Approve All
+                                    <!-- Import to Repository Button -->
+                                    <button id="remote-save-button" class="btn btn-success" hidden disabled>
+                                        <i class="bi bi-cloud-upload"></i> Import to Repository
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Validation Errors Container (shown if validation fails) -->
+                        <div id="validation-errors" class="mt-3" style="display: none;">
+                            <div class="alert alert-danger">
+                                <h6><i class="bi bi-exclamation-triangle"></i> Validation Errors</h6>
+                                <div id="validation-errors-list"></div>
+                            </div>
+                        </div>
+
+                        <!-- Import Summary Container (shown after successful parsing) -->
+                        <div id="import-summary" class="mt-3" style="display: none;">
+                            <div class="alert alert-info">
+                                <h6><i class="bi bi-list-check"></i> Import Summary</h6>
+                                <div id="import-summary-content"></div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Modal Footer -->
                     <div class="modal-footer">
-                        <!-- Add any footer buttons if needed -->
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     </div>
                 </div>
@@ -155,7 +154,7 @@
 
         <!-- Bootstrap JS and other scripts -->
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-        <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
         <script type="module" src="index.js"></script>
     </body>

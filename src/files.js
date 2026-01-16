@@ -1,22 +1,47 @@
 import { parseColumns, structureDictionary, structureFiles } from "./dictionary.js";
 import { assignConcepts } from "./concepts.js";
-import { appState, removeEventListeners } from "./common.js";
-import { renderUploadModal, renderAddModal } from "./modals.js";
-import { MODAL_CONFIG } from "./config.js";
+import { appState, removeEventListeners, showAnimation, hideAnimation } from "./common.js";
+import { renderUploadModal } from "./modals.js";
+import { MODAL_CONFIG, CONCEPT_TYPE_COLORS } from "./config.js";
+import { addFile } from "./api.js";
+import { refreshHomePage } from "./homepage.js";
 
+/**
+ * Reads an Excel file and returns the data as a 2D array
+ * Looks for a "Dictionary" sheet first, falls back to first sheet
+ * Filters out completely empty rows (rows where all cells are empty strings)
+ * @param {File} file - The Excel file to read
+ * @returns {Promise<Array>} 2D array of spreadsheet data
+ */
 export const readSpreadsheet = async (file) => {
-
     const data = await file.arrayBuffer();
-
     const workbook = XLSX.read(data);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    
+    // Look for "Dictionary" sheet first, fall back to first sheet
+    const sheetName = workbook.SheetNames.includes('Dictionary') 
+        ? 'Dictionary' 
+        : workbook.SheetNames[0];
+    
+    const sheet = workbook.Sheets[sheetName];
     const arrayData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-    return arrayData;
+    
+    // Filter out completely empty rows (styled cells read as empty strings)
+    const filteredData = arrayData.filter((row, index) => {
+        // Always keep header row (index 0)
+        if (index === 0) return true;
+        // Keep row if at least one cell has non-empty content
+        return row.some(cell => cell !== undefined && cell !== null && cell !== '');
+    });
+    
+    return filteredData;
 }
 
+/**
+ * Reads multiple JSON files and returns parsed data
+ * @param {Array<File>} files - Array of files to read
+ * @returns {Promise<Array>} Array of parsed JSON objects
+ */
 const readFiles = async (files) => {
-
     let filesArray = [];
     let fileData = [];
 
@@ -27,9 +52,7 @@ const readFiles = async (files) => {
     }
 
     const filePromises = filesArray.map((file) => {
-    
         return new Promise((resolve, reject) => {
-          
             const reader = new FileReader();
             reader.onload = async () => {
                 try {
@@ -54,8 +77,11 @@ const readFiles = async (files) => {
     return fileData;
 }
 
+/**
+ * Generates and downloads an Excel spreadsheet from data
+ * @param {Array} data - 2D array of data to export
+ */
 export const generateSpreadsheet = (data) => {
-    
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.aoa_to_sheet(data);
 
@@ -66,15 +92,17 @@ export const generateSpreadsheet = (data) => {
 
     const downloadLink = document.createElement('a');
     downloadLink.href = URL.createObjectURL(blob);
-    downloadLink.download = 'data.xlsx'; // Default filename
+    downloadLink.download = 'data.xlsx';
     downloadLink.click();
 
-    // Clean up
     URL.revokeObjectURL(downloadLink.href);
 }
 
+/**
+ * Handles dropped objects (files or directories)
+ * @param {DragEvent} e - The drop event
+ */
 export const objectDropped = async (e) => {
-
     const dropObject = e.dataTransfer.items[0];
     const handle = await dropObject.getAsFileSystemHandle();
 
@@ -90,102 +118,278 @@ export const objectDropped = async (e) => {
     }
 }
 
+/**
+ * Handles file drops - processes Excel dictionary files
+ * @param {FileSystemFileHandle} handle - File system handle for the dropped file
+ */
 const handleFile = async (handle) => {
-
-    const importModal = bootstrap.Modal.getInstance(document.getElementById('importModal'));
     const zoneContent = document.getElementById('drop-zone-content');
-
     const file = await handle.getFile();
 
+    // Validate file type
     const validFileTypes = [
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     ];
 
     if (!validFileTypes.includes(file.type)) {
-        zoneContent.innerHTML = `
-            <div class="text-danger">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                Only Excel files (.xlsx) are accepted
-            </div>
-        `;
-
+        showValidationError(['Only Excel files (.xlsx) are accepted']);
         return;
     }
     
-    const data = await readSpreadsheet(file);
-    const columns = parseColumns(data[0]);
-
-    data.shift();
-
-    const mapping = assignConcepts(columns, data);
-    if(!mapping) {
-        console.log("failed to create key -> concept mapping");
-        return;
-    }
-
-    const conceptObjects = structureDictionary(mapping, columns, data);
-    appState.setState({ conceptObjects });
-
-    // set to name of file
-    zoneContent.innerHTML = file.name;
-
-    // Enable the Save button
-    let saveButton = document.getElementById('save-button');
-    saveButton = removeEventListeners(saveButton);
-
-    saveButton.innerHTML = `Generate Dictionary`;
-    saveButton.disabled = false;
-    saveButton.hidden = false;
-
-    saveButton.addEventListener('click', async () => {
-        const folderHandler = await window.showDirectoryPicker();
-        appState.setState({ folderHandler });
-    
-        const { conceptObjects } = appState.getState();
-    
-        const savePromises = conceptObjects.map(async conceptObject => {
-            const blob = new Blob([JSON.stringify(conceptObject)], { type: "application/json" });
-            const name = `${conceptObject.conceptID}.json`;
-            const fileHandle = await folderHandler.getFileHandle(name, { create: true });
-            const writable = await fileHandle.createWritable();
-    
-            await writable.write(blob);
-            await writable.close();
-        
-            console.log(`JSON file "${name}" saved successfully`);
-        });
-
-        await Promise.all(savePromises);
-
-        if (importModal) importModal.hide();
-    });
-
-    const { isLoggedIn } = appState.getState();
-
-    if(isLoggedIn) {
-        // Enable the Review Import Button (new modal-based workflow)
-        const remoteSaveButton = document.getElementById('remote-save-button');
-        remoteSaveButton.innerHTML = 'Review Import';
-        remoteSaveButton.disabled = false;
-        remoteSaveButton.hidden = false;
-
-        remoteSaveButton.addEventListener('click', async () => {
-            const { conceptObjects } = appState.getState();
-            
-            if (!conceptObjects || conceptObjects.length === 0) {
-                alert('No concepts to review.');
-                return;
-            }
-            
-            // Start the import review process using our new queue system
-            ImportQueue.init(conceptObjects);
-        });
-    }
-
+    // Process the dictionary file
+    await processDictionaryFile(file);
 }
 
-const handleDirectory = async (directoryHandle) => {
+/**
+ * Processes a dictionary Excel file and prepares for import
+ * @param {File} file - The Excel file to process
+ */
+const processDictionaryFile = async (file) => {
+    const zoneContent = document.getElementById('drop-zone-content');
+    const validationErrors = document.getElementById('validation-errors');
+    const importSummary = document.getElementById('import-summary');
+    
+    // Reset UI state
+    hideValidationErrors();
+    hideImportSummary();
+    
+    // Show loading state
+    zoneContent.innerHTML = `
+        <div class="text-primary">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            Processing dictionary from <strong>${file.name}</strong>...
+        </div>
+    `;
+    
+    try {
+        // Read and parse the spreadsheet
+        const data = await readSpreadsheet(file);
+        
+        if (!data || data.length < 2) {
+            showValidationError(['File is empty or contains no data rows']);
+            resetDropZone();
+            return;
+        }
+        
+        // Parse column headers to identify concept types
+        const columns = parseColumns(data[0]);
+        
+        // Remove header row for processing
+        const dataRows = data.slice(1);
+        
+        // Validate and create concept mapping
+        const mapping = assignConcepts(columns, dataRows);
+        
+        if (!mapping) {
+            showValidationError(['Failed to create concept mapping. Please check your data format.']);
+            resetDropZone();
+            return;
+        }
+        
+        // Structure the dictionary into concept objects
+        const conceptObjects = structureDictionary(mapping, columns, dataRows);
+        
+        if (!conceptObjects || conceptObjects.length === 0) {
+            showValidationError(['No valid concepts found in the file']);
+            resetDropZone();
+            return;
+        }
+        
+        // Store all parsed data in app state for review before import
+        // This allows inspection of the import before committing
+        appState.setState({ 
+            conceptObjects,           // Final structured objects ready for saving
+            importFileName: file.name,
+            importMapping: mapping,   // Key-to-ID mapping with auto-generated IDs
+            importColumns: columns,   // Column index mapping
+            importRawData: dataRows   // Original spreadsheet data (sans header)
+        });
+        
+        console.log('Import data stored in appState for review:', {
+            conceptCount: conceptObjects.length,
+            mappingCount: mapping.length,
+            columns: columns,
+            fileName: file.name
+        });
+        
+        // Show success and summary
+        zoneContent.innerHTML = `
+            <div class="text-success">
+                <i class="bi bi-check-circle-fill me-2"></i>
+                <strong>${file.name}</strong> parsed successfully
+            </div>
+        `;
+        
+        // Display import summary
+        showImportSummary(conceptObjects);
+        
+        // Enable import button
+        setupImportButton(conceptObjects);
+        
+    } catch (error) {
+        console.error('Error processing dictionary file:', error);
+        showValidationError([`Error processing file: ${error.message}`]);
+        resetDropZone();
+    }
+}
 
+/**
+ * Shows validation errors in the modal
+ * @param {Array<string>} errors - Array of error messages
+ */
+const showValidationError = (errors) => {
+    const validationErrors = document.getElementById('validation-errors');
+    const errorsList = document.getElementById('validation-errors-list');
+    
+    if (validationErrors && errorsList) {
+        errorsList.innerHTML = errors.map(err => `
+            <div class="mb-1"><i class="bi bi-x-circle text-danger me-1"></i> ${err}</div>
+        `).join('');
+        validationErrors.style.display = 'block';
+    }
+}
+
+/**
+ * Hides validation errors
+ */
+const hideValidationErrors = () => {
+    const validationErrors = document.getElementById('validation-errors');
+    if (validationErrors) {
+        validationErrors.style.display = 'none';
+    }
+}
+
+/**
+ * Shows import summary with concept counts using color-coded display
+ * @param {Array} conceptObjects - Array of concept objects
+ */
+const showImportSummary = (conceptObjects) => {
+    const importSummary = document.getElementById('import-summary');
+    const summaryContent = document.getElementById('import-summary-content');
+    
+    if (!importSummary || !summaryContent) return;
+    
+    // Count concepts by type
+    const counts = {};
+    MODAL_CONFIG.CONCEPT_TYPES.forEach(type => {
+        counts[type] = conceptObjects.filter(c => c.object_type === type).length;
+    });
+    
+    // Build summary HTML with color-coded pills
+    const summaryHtml = `
+        <div class="d-flex flex-wrap justify-content-center gap-2 mb-3">
+            ${MODAL_CONFIG.CONCEPT_TYPES.map(type => `
+                <div class="import-summary-type concept-type-${type.toLowerCase()}${counts[type] === 0 ? ' opacity-50' : ''}">
+                    <span class="count">${counts[type]}</span>
+                    <span class="label">${type}</span>
+                </div>
+            `).join('')}
+        </div>
+        <div class="text-center">
+            <strong>Total: ${conceptObjects.length} concepts</strong> ready to import
+        </div>
+    `;
+    
+    summaryContent.innerHTML = summaryHtml;
+    importSummary.style.display = 'block';
+}
+
+/**
+ * Hides import summary
+ */
+const hideImportSummary = () => {
+    const importSummary = document.getElementById('import-summary');
+    if (importSummary) {
+        importSummary.style.display = 'none';
+    }
+}
+
+/**
+ * Resets the drop zone to its initial state
+ */
+const resetDropZone = () => {
+    const zoneContent = document.getElementById('drop-zone-content');
+    if (zoneContent) {
+        zoneContent.innerHTML = 'Drag & Drop Dictionary Excel File Here';
+    }
+}
+
+/**
+ * Sets up the import button with click handler
+ * @param {Array} conceptObjects - Concept objects to import
+ */
+const setupImportButton = (conceptObjects) => {
+    const actionButtons = document.getElementById('action-buttons');
+    let remoteSaveButton = document.getElementById('remote-save-button');
+    
+    if (!remoteSaveButton || !actionButtons) return;
+    
+    // Show action buttons
+    actionButtons.style.display = 'block';
+    
+    // Remove existing event listeners
+    remoteSaveButton = removeEventListeners(remoteSaveButton);
+    
+    remoteSaveButton.innerHTML = `<i class="bi bi-cloud-upload"></i> Import ${conceptObjects.length} Concepts to Repository`;
+    remoteSaveButton.disabled = false;
+    remoteSaveButton.hidden = false;
+    
+    remoteSaveButton.addEventListener('click', async () => {
+        await importConceptsToRepository(conceptObjects);
+    });
+}
+
+/**
+ * Imports all concept objects to the GitHub repository
+ * @param {Array} conceptObjects - Array of concept objects to import
+ */
+const importConceptsToRepository = async (conceptObjects) => {
+    const importModal = bootstrap.Modal.getInstance(document.getElementById('importModal'));
+    const remoteSaveButton = document.getElementById('remote-save-button');
+    
+    // Disable button and show progress
+    if (remoteSaveButton) {
+        remoteSaveButton.disabled = true;
+        remoteSaveButton.innerHTML = `
+            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+            Importing concepts...
+        `;
+    }
+    
+    showAnimation();
+    
+    try {
+        // Prepare files for upload
+        const files = conceptObjects.map(concept => ({
+            name: `${concept.conceptID}.json`,
+            content: JSON.stringify(concept, null, 2)
+        }));
+        
+        // Close import modal and show upload progress modal
+        if (importModal) importModal.hide();
+        
+        // Use existing upload modal for progress tracking
+        await renderUploadModal(files);
+        
+    } catch (error) {
+        console.error('Error importing concepts:', error);
+        alert(`Error importing concepts: ${error.message}`);
+        
+        // Re-enable button on error
+        if (remoteSaveButton) {
+            remoteSaveButton.disabled = false;
+            remoteSaveButton.innerHTML = `<i class="bi bi-cloud-upload"></i> Import to Repository`;
+        }
+    } finally {
+        hideAnimation();
+    }
+}
+
+/**
+ * Handles directory drops - reads JSON files and generates spreadsheet export
+ * @param {FileSystemDirectoryHandle} directoryHandle - Directory handle
+ */
+const handleDirectory = async (directoryHandle) => {
     const files = [];
     const importModal = bootstrap.Modal.getInstance(document.getElementById('importModal'));
     const zoneContent = document.getElementById('drop-zone-content');
@@ -198,323 +402,285 @@ const handleDirectory = async (directoryHandle) => {
     }
 
     let data = await readFiles(files);
-
     let structuredData = structureFiles(data);
 
-    zoneContent.innerHTML = directoryHandle.name;
+    zoneContent.innerHTML = `
+        <div class="text-success">
+            <i class="bi bi-folder-fill me-2"></i>
+            <strong>${directoryHandle.name}</strong> - ${files.length} files loaded
+        </div>
+    `;
 
-    // Enable the Save button
-    let saveButton = document.getElementById('save-button');
-    saveButton = removeEventListeners(saveButton);
-
-    saveButton.innerHTML = `Generate Spreadsheet`;
-    saveButton.disabled = false;
-    saveButton.hidden = false;
-
-    saveButton.addEventListener('click', async () => {
-        generateSpreadsheet(structuredData);
-
-        if (importModal) importModal.hide();
-    });
+    // Show export button for directory (export to spreadsheet)
+    const actionButtons = document.getElementById('action-buttons');
+    if (actionButtons) {
+        actionButtons.style.display = 'block';
+        actionButtons.innerHTML = `
+            <button id="export-spreadsheet-button" class="btn btn-primary">
+                <i class="bi bi-file-earmark-spreadsheet"></i> Export to Spreadsheet
+            </button>
+        `;
+        
+        document.getElementById('export-spreadsheet-button').addEventListener('click', () => {
+            generateSpreadsheet(structuredData);
+            if (importModal) importModal.hide();
+        });
+    }
 }
 
 /**
- * Import Queue Manager - handles sequential review of imported concepts
+ * Generates a dictionary template Excel file with columns for all concept types
+ * Creates a multi-sheet workbook with Instructions and color-coded Data sheet
+ * Column naming follows the pattern: TYPE_FIELD (e.g., PRIMARY_KEY, PRIMARY_CID)
  */
-export const ImportQueue = {
-    concepts: [],
-    currentIndex: 0,
-    acceptedConcepts: [],
-    skippedConcepts: [],
-    
-    /**
-     * Initialize import queue with concepts to review
-     * @param {Array} conceptsToReview - Array of concept objects from import
-     */
-    init(conceptsToReview) {
-        this.concepts = conceptsToReview;
-        this.currentIndex = 0;
-        this.acceptedConcepts = [];
-        this.skippedConcepts = [];
-        
-        if (this.concepts.length === 0) {
-            alert('No valid concepts found to import.');
-            return;
-        }
-        
-        // Close the import modal and start review process
-        const importModal = bootstrap.Modal.getInstance(document.getElementById('importModal'));
-        if (importModal) importModal.hide();
-        
-        // Start reviewing concepts
-        this.showNext();
-    },
-    
-    /**
-     * Show the next concept in the review queue
-     */
-    showNext() {
-        if (this.currentIndex < this.concepts.length) {
-            const concept = this.concepts[this.currentIndex];
-            const importOptions = {
-                title: 'Review Imported Concept',
-                current: this.currentIndex + 1,
-                total: this.concepts.length,
-                onAccept: (acceptedConcept) => this.onConceptAccepted(acceptedConcept),
-                onSkip: () => this.onConceptSkipped()
-            };
-            
-            // Open the add modal in import review mode
-            renderAddModal(concept, importOptions);
-        } else {
-            // All concepts reviewed - show completion summary
-            this.showCompletionSummary();
-        }
-    },
-    
-    /**
-     * Handle when a concept is accepted
-     * @param {Object} acceptedConcept - The accepted concept data
-     */
-    onConceptAccepted(acceptedConcept) {
-        this.acceptedConcepts.push({
-            original: this.concepts[this.currentIndex],
-            accepted: acceptedConcept
-        });
-        this.currentIndex++;
-        
-        // Small delay to allow modal to close before opening next one
-        setTimeout(() => this.showNext(), 100);
-    },
-    
-    /**
-     * Handle when a concept is skipped
-     */
-    onConceptSkipped() {
-        this.skippedConcepts.push(this.concepts[this.currentIndex]);
-        this.currentIndex++;
-        
-        // Small delay to allow modal to close before opening next one
-        setTimeout(() => this.showNext(), 100);
-    },
-    
-    /**
-     * Show import completion summary
-     */
-    showCompletionSummary() {
-        const total = this.concepts.length;
-        const accepted = this.acceptedConcepts.length;
-        const skipped = this.skippedConcepts.length;
-        
-        let message = `Import Review Complete!\n\n`;
-        message += `✅ ${accepted} concepts accepted and saved\n`;
-        message += `⏭️ ${skipped} concepts skipped\n`;
-        message += `📊 Total reviewed: ${total}`;
-        
-        if (skipped > 0) {
-            message += `\n\nSkipped concepts:\n`;
-            this.skippedConcepts.forEach((concept, index) => {
-                message += `• ${concept.key || concept.conceptId || `Concept ${index + 1}`}\n`;
-            });
-        }
-        
-        alert(message);
-        
-        // Refresh the page to show new concepts
-        if (accepted > 0) {
-            // Assuming we have access to refreshHomePage function
-            if (typeof refreshHomePage === 'function') {
-                refreshHomePage();
-            } else {
-                location.reload(); // Fallback
-            }
-        }
-    }
-};
-
-/**
- * Template Generation Functions for Config-Based Import
- */
-
-/**
- * Generates an Excel template based on user's configuration for a specific concept type
- * @param {string} conceptType - The concept type (PRIMARY, SECONDARY, etc.)
- * @returns {void} Downloads the template file
- */
-export const generateConfigBasedTemplate = (conceptType) => {
+export const generateDictionaryTemplate = () => {
     try {
         const { config } = appState.getState();
         
-        if (!config || !config[conceptType]) {
-            alert(`No configuration found for ${conceptType} concept type. Please configure your concept types first.`);
-            return;
-        }
-
-        // Generate template data based on config
-        const templateData = createTemplateFromConfig(conceptType, config[conceptType]);
+        // Order: PRIMARY -> SECONDARY -> SOURCE -> QUESTION -> RESPONSE
+        const conceptTypes = ['PRIMARY', 'SECONDARY', 'SOURCE', 'QUESTION', 'RESPONSE'];
         
-        // Create Excel workbook
+        // Build headers and track which type each column belongs to
+        const headers = [];
+        const columnTypes = []; // Track concept type for each column (for coloring)
+        
+        conceptTypes.forEach(type => {
+            // Always add KEY and CID columns for each type
+            headers.push(`${type}_KEY`);
+            columnTypes.push(type);
+            
+            headers.push(`${type}_CID`);
+            columnTypes.push(type);
+            
+            // Add additional NON-REFERENCE fields from config if available
+            // Reference fields (parent, source, responses) are determined by row position, not columns
+            if (config && config[type]) {
+                config[type].forEach(field => {
+                    // Skip key and conceptId as we already added them
+                    if (field.id === 'key' || field.id === 'conceptId' || field.id === 'conceptID') {
+                        return;
+                    }
+                    
+                    // Skip reference-type fields - relationships are determined by row position
+                    if (field.type === 'reference') {
+                        return;
+                    }
+                    
+                    headers.push(`${type}_${field.id.toUpperCase()}`);
+                    columnTypes.push(type);
+                });
+            }
+        });
+        
         const workbook = XLSX.utils.book_new();
-        const worksheet = XLSX.utils.aoa_to_sheet(templateData);
         
-        // Add some basic formatting and validation hints
-        addTemplateFormatting(worksheet, config[conceptType]);
+        // ============ CREATE INSTRUCTIONS SHEET ============
+        const instructionsSheet = createInstructionsSheet(conceptTypes);
+        XLSX.utils.book_append_sheet(workbook, instructionsSheet, 'Instructions');
         
-        XLSX.utils.book_append_sheet(workbook, worksheet, `${conceptType}_Import`);
+        // ============ CREATE DATA SHEET ============
+        const dataSheet = createDataSheet(headers, columnTypes);
+        XLSX.utils.book_append_sheet(workbook, dataSheet, 'Dictionary');
         
-        // Generate and download file
+        // Generate and download
         const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         
         const downloadLink = document.createElement('a');
         downloadLink.href = URL.createObjectURL(blob);
-        downloadLink.download = `CIDTool_${conceptType}_Template.xlsx`;
+        downloadLink.download = 'CIDTool_Dictionary_Template.xlsx';
         downloadLink.click();
         
-        // Clean up
         URL.revokeObjectURL(downloadLink.href);
         
-        // Show success message
-        showTemplateDownloadSuccess(conceptType);
+        // Show success notification
+        showTemplateDownloadSuccess('Dictionary');
         
     } catch (error) {
-        console.error('Error generating template:', error);
+        console.error('Error generating dictionary template:', error);
         alert('Error generating template. Please try again.');
     }
 };
 
 /**
- * Creates template data array from user configuration
- * @param {string} conceptType - The concept type
- * @param {Array} fieldConfig - User's field configuration for this type
- * @returns {Array} 2D array for Excel sheet
+ * Creates the Instructions sheet with guidance and color legend
+ * @param {Array<string>} conceptTypes - Array of concept type names
+ * @returns {Object} XLSX worksheet object
  */
-const createTemplateFromConfig = (conceptType, fieldConfig) => {
-    const headers = [];
-    const exampleRow = [];
-    const instructionRow = [];
-    
-    // Always include the required base fields
-    headers.push('conceptId');
-    exampleRow.push('123456789');
-    instructionRow.push('9-digit concept ID (required)');
-    
-    headers.push('key');
-    exampleRow.push('unique_key_1');
-    instructionRow.push('Unique identifier for this concept (required)');
-    
-    // Add fields from user configuration
-    fieldConfig.forEach(field => {
-        if (field.id !== 'conceptId' && field.id !== 'key') { // Skip if already added
-            headers.push(field.id);
-            
-            // Generate appropriate example based on field type
-            if (field.type === 'reference') {
-                exampleRow.push(getExampleReferenceValue(field));
-                instructionRow.push(`Reference to ${field.referencesType || 'related'} concept ${field.required ? '(required)' : '(optional)'}`);
-            } else if (field.type === 'concept') {
-                exampleRow.push('123456789');
-                instructionRow.push(`Concept ID ${field.required ? '(required)' : '(optional)'}`);
-            } else {
-                exampleRow.push(getExampleTextValue(field));
-                instructionRow.push(`${field.label || field.id} ${field.required ? '(required)' : '(optional)'}`);
-            }
-        }
-    });
-    
-    return [
-        headers,
-        instructionRow,
-        exampleRow,
-        // Add a few empty rows for user data
-        new Array(headers.length).fill(''),
-        new Array(headers.length).fill(''),
-        new Array(headers.length).fill('')
+const createInstructionsSheet = (conceptTypes) => {
+    const instructions = [
+        ['CIDTool Dictionary Import Template'],
+        [''],
+        ['HOW TO USE THIS TEMPLATE:'],
+        ['1. Enter your concept data in the "Dictionary" sheet'],
+        ['2. Each column is prefixed with its concept type (e.g., PRIMARY_KEY, SECONDARY_CID)'],
+        ['3. KEY columns contain the unique identifier/name for each concept'],
+        ['4. CID columns contain the 9-digit Concept ID (leave blank to auto-generate)'],
+        ['5. Columns are color-coded by concept type for easy identification'],
+        [''],
+        ['HIERARCHICAL STRUCTURE (IMPORTANT!):'],
+        ['Relationships between concepts are determined by ROW POSITION, not explicit columns.'],
+        [''],
+        ['• A SECONDARY on a row belongs to the nearest PRIMARY above it (or same row)'],
+        ['• A QUESTION belongs to the nearest SECONDARY above it'],
+        ['• A SOURCE on the same row as a QUESTION is linked to that QUESTION'],
+        ['• RESPONSEs listed below a QUESTION belong to that QUESTION'],
+        [''],
+        ['EXAMPLE STRUCTURE:'],
+        ['Row 1: PRIMARY_KEY="Survey"'],
+        ['Row 2:   SECONDARY_KEY="Demographics"    (belongs to Survey)'],
+        ['Row 3:     SOURCE_KEY="Form A"  QUESTION_KEY="What is your age?"  (belongs to Demographics, uses Form A)'],
+        ['Row 4:       RESPONSE_KEY="Under 18"     (belongs to "What is your age?" question)'],
+        ['Row 5:       RESPONSE_KEY="18-65"        (belongs to "What is your age?" question)'],
+        ['Row 6:       RESPONSE_KEY="Over 65"      (belongs to "What is your age?" question)'],
+        ['Row 7:     QUESTION_KEY="What is your gender?"  (new question under Demographics)'],
+        ['Row 8:       RESPONSE_KEY="Male"'],
+        ['Row 9:       RESPONSE_KEY="Female"'],
+        [''],
+        ['CONCEPT HIERARCHY:'],
+        ['PRIMARY → SECONDARY → QUESTION → RESPONSE'],
+        ['                          ↑'],
+        ['                       SOURCE'],
+        [''],
+        ['COLOR LEGEND:'],
+        ...conceptTypes.map(type => [`${type}: ${CONCEPT_TYPE_COLORS[type].name}`]),
+        [''],
+        ['IMPORTANT NOTES:'],
+        ['• Do not rename or reorder columns'],
+        ['• Do not modify the header row'],
+        ['• Concept IDs must be exactly 9 digits if provided'],
+        ['• Each KEY value must be unique within its concept type'],
+        ['• Indentation in this example is for illustration only - use the actual columns']
     ];
-};
-
-/**
- * Gets example value for reference fields
- * @param {Object} field - Field configuration
- * @returns {string} Example value
- */
-const getExampleReferenceValue = (field) => {
-    if (field.referencesType === 'PRIMARY') {
-        return 'primary_concept_key';
-    } else if (field.referencesType === 'SECONDARY') {
-        return 'secondary_concept_key';
-    } else if (field.referencesType === 'RESPONSE') {
-        return 'response_1,response_2'; // Multiple values for responses
-    }
-    return 'related_concept_key';
-};
-
-/**
- * Gets example value for text fields
- * @param {Object} field - Field configuration
- * @returns {string} Example value
- */
-const getExampleTextValue = (field) => {
-    const fieldId = field.id.toLowerCase();
     
-    if (fieldId.includes('name')) {
-        return 'Sample Concept Name';
-    } else if (fieldId.includes('description')) {
-        return 'Description of this concept';
-    } else if (fieldId.includes('value')) {
-        return 'sample_value';
-    } else if (fieldId.includes('label')) {
-        return 'Display Label';
+    const worksheet = XLSX.utils.aoa_to_sheet(instructions);
+    
+    // Style the title
+    if (worksheet['A1']) {
+        worksheet['A1'].s = {
+            font: { bold: true, sz: 16 },
+            alignment: { horizontal: 'left' }
+        };
     }
     
-    return `Sample ${field.label || field.id}`;
-};
-
-/**
- * Adds basic formatting to the template worksheet
- * @param {Object} worksheet - XLSX worksheet object
- * @param {Array} fieldConfig - Field configuration
- */
-const addTemplateFormatting = (worksheet, fieldConfig) => {
-    // This is a basic implementation - XLSX library has limited formatting in free version
-    // But we can add comments and basic structure
-    
-    if (!worksheet['!cols']) {
-        worksheet['!cols'] = [];
-    }
-    
-    // Set column widths
-    fieldConfig.forEach((field, index) => {
-        if (!worksheet['!cols'][index + 2]) { // +2 for conceptId and key columns
-            worksheet['!cols'][index + 2] = {};
+    // Style section headers (bold)
+    // Row 3: HOW TO USE, Row 10: HIERARCHICAL STRUCTURE, Row 18: EXAMPLE STRUCTURE
+    // Row 29: CONCEPT HIERARCHY, Row 34: COLOR LEGEND, Row 41: IMPORTANT NOTES
+    const sectionHeaders = [3, 10, 18, 29, 34, 41];
+    sectionHeaders.forEach(row => {
+        const cellRef = `A${row}`;
+        if (worksheet[cellRef]) {
+            worksheet[cellRef].s = {
+                font: { bold: true }
+            };
         }
-        worksheet['!cols'][index + 2].width = field.id.length + 10; // Adjust width based on field name
     });
     
-    // Set first two columns (conceptId, key) to reasonable widths
-    worksheet['!cols'][0] = { width: 15 }; // conceptId
-    worksheet['!cols'][1] = { width: 20 }; // key
+    // Style the color legend items with their respective colors
+    const colorLegendStartRow = 35; // After "COLOR LEGEND:" header (row 34)
+    conceptTypes.forEach((type, index) => {
+        const cellRef = `A${colorLegendStartRow + index}`;
+        if (worksheet[cellRef]) {
+            const color = CONCEPT_TYPE_COLORS[type];
+            worksheet[cellRef].s = {
+                fill: { fgColor: { rgb: color.hex.replace('#', '') } },
+                font: { color: { rgb: 'FFFFFF' }, bold: true }
+            };
+        }
+    });
+    
+    // Set column width
+    worksheet['!cols'] = [{ width: 100 }];
+    
+    return worksheet;
+};
+
+/**
+ * Creates the Data sheet with color-coded headers
+ * @param {Array<string>} headers - Column headers
+ * @param {Array<string>} columnTypes - Concept type for each column
+ * @returns {Object} XLSX worksheet object
+ */
+const createDataSheet = (headers, columnTypes) => {
+    // Create data array with headers and empty rows
+    const data = [
+        headers,
+        ...Array(100).fill(null).map(() => new Array(headers.length).fill(''))
+    ];
+    
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    
+    // Apply color styling to header row
+    headers.forEach((header, colIndex) => {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIndex });
+        const conceptType = columnTypes[colIndex];
+        const color = CONCEPT_TYPE_COLORS[conceptType];
+        
+        if (worksheet[cellRef]) {
+            worksheet[cellRef].s = {
+                fill: { fgColor: { rgb: color.hex.replace('#', '') } },
+                font: { color: { rgb: 'FFFFFF' }, bold: true },
+                alignment: { horizontal: 'center' },
+                border: {
+                    top: { style: 'thin', color: { rgb: '000000' } },
+                    bottom: { style: 'thin', color: { rgb: '000000' } },
+                    left: { style: 'thin', color: { rgb: '000000' } },
+                    right: { style: 'thin', color: { rgb: '000000' } }
+                }
+            };
+        }
+    });
+    
+    // Apply light background color to data cells for visual grouping
+    for (let rowIndex = 1; rowIndex <= 100; rowIndex++) {
+        headers.forEach((header, colIndex) => {
+            const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+            const conceptType = columnTypes[colIndex];
+            const color = CONCEPT_TYPE_COLORS[conceptType];
+            
+            // Initialize cell if it doesn't exist
+            if (!worksheet[cellRef]) {
+                worksheet[cellRef] = { v: '', t: 's' };
+            }
+            
+            worksheet[cellRef].s = {
+                fill: { fgColor: { rgb: color.light.replace('#', '') } },
+                border: {
+                    top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+                }
+            };
+        });
+    }
+    
+    // Set column widths based on header length
+    worksheet['!cols'] = headers.map(h => ({ width: Math.max(h.length + 2, 15) }));
+    
+    // Freeze header row
+    worksheet['!freeze'] = { xSplit: 0, ySplit: 1 };
+    
+    return worksheet;
 };
 
 /**
  * Shows success message after template download
- * @param {string} conceptType - The concept type that was downloaded
+ * @param {string} templateType - The type of template downloaded
  */
-const showTemplateDownloadSuccess = (conceptType) => {
-    // Create a temporary success message
+const showTemplateDownloadSuccess = (templateType) => {
     const successDiv = document.createElement('div');
     successDiv.className = 'alert alert-success alert-dismissible fade show position-fixed';
     successDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
     successDiv.innerHTML = `
         <i class="bi bi-check-circle-fill"></i>
         <strong>Template Downloaded!</strong>
-        <br>Your ${conceptType} import template is ready to use.
+        <br>Your ${templateType} template is ready to use.
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
     
     document.body.appendChild(successDiv);
     
-    // Auto-remove after 5 seconds
     setTimeout(() => {
         if (successDiv.parentNode) {
             successDiv.parentNode.removeChild(successDiv);
@@ -523,33 +689,18 @@ const showTemplateDownloadSuccess = (conceptType) => {
 };
 
 /**
- * Sets up event listeners for the enhanced import modal
+ * Sets up event listeners for the import modal
  */
 export const setupImportModal = () => {
-    // Check if user has configuration and update UI accordingly
-    updateConfigStatus();
-    
-    // Type selection change handler
-    const conceptTypeSelect = document.getElementById('conceptTypeSelect');
-    if (conceptTypeSelect) {
-        conceptTypeSelect.addEventListener('change', (e) => {
-            const selectedType = e.target.value;
-            updateModalForSelectedType(selectedType);
-        });
-    }
-    
     // Template download button handler
     const downloadTemplateBtn = document.getElementById('downloadTemplateBtn');
     if (downloadTemplateBtn) {
-        downloadTemplateBtn.addEventListener('click', () => {
-            const { config } = appState.getState();
-            if (!config || Object.keys(config).length === 0) {
-                alert('No configuration found. Please configure your concept types first using the Configure button in the main interface.');
-                return;
-            }
-            
-            const selectedType = document.getElementById('conceptTypeSelect').value;
-            generateConfigBasedTemplate(selectedType);
+        // Remove any existing listeners
+        const newBtn = downloadTemplateBtn.cloneNode(true);
+        downloadTemplateBtn.parentNode.replaceChild(newBtn, downloadTemplateBtn);
+        
+        newBtn.addEventListener('click', () => {
+            generateDictionaryTemplate();
         });
     }
     
@@ -558,122 +709,21 @@ export const setupImportModal = () => {
     const dropZone = document.getElementById('drop-zone');
     
     if (fileInput && dropZone) {
-        // Make drop zone clickable
-        dropZone.addEventListener('click', () => {
+        // Make drop zone clickable (but not the action buttons area)
+        dropZone.addEventListener('click', (e) => {
+            // Don't trigger file input if clicking on buttons
+            if (e.target.closest('#action-buttons')) {
+                return;
+            }
             fileInput.click();
         });
         
-        // Handle file selection
-        fileInput.addEventListener('change', (e) => {
+        // Handle file selection via click
+        fileInput.addEventListener('change', async (e) => {
             if (e.target.files.length > 0) {
                 const file = e.target.files[0];
-                handleSelectedFile(file);
+                await processDictionaryFile(file);
             }
         });
-    }
-};
-
-/**
- * Updates the config status display in the modal
- */
-const updateConfigStatus = () => {
-    const { config } = appState.getState();
-    const downloadBtn = document.getElementById('downloadTemplateBtn');
-    
-    if (!downloadBtn) return;
-    
-    if (!config || Object.keys(config).length === 0) {
-        downloadBtn.disabled = true;
-        downloadBtn.innerHTML = `
-            <i class="bi bi-exclamation-triangle"></i> 
-            No Configuration Found
-        `;
-        downloadBtn.title = 'Please configure your concept types first';
-    } else {
-        downloadBtn.disabled = false;
-        const selectedType = document.getElementById('conceptTypeSelect')?.value || 'PRIMARY';
-        downloadBtn.innerHTML = `
-            <i class="bi bi-file-earmark-spreadsheet"></i> 
-            Download ${selectedType} Template
-        `;
-        downloadBtn.title = 'Download Excel template based on your configuration';
-    }
-};
-
-/**
- * Updates modal text elements when concept type changes
- * @param {string} conceptType - Selected concept type
- */
-const updateModalForSelectedType = (conceptType) => {
-    const elements = {
-        'selectedTypeText': conceptType,
-        'selectedTypeFileText': conceptType,
-        'selectedTypeFileText2': conceptType
-    };
-    
-    Object.entries(elements).forEach(([elementId, text]) => {
-        const element = document.getElementById(elementId);
-        if (element) {
-            element.textContent = text;
-        }
-    });
-    
-    // Update download button text
-    updateConfigStatus();
-};
-
-/**
- * Handles file selection (both drag-drop and click-browse)
- * @param {File} file - Selected file
- */
-const handleSelectedFile = async (file) => {
-    const zoneContent = document.getElementById('drop-zone-content');
-    const selectedType = document.getElementById('conceptTypeSelect').value;
-    
-    // Validate file type
-    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-        zoneContent.innerHTML = `
-            <div class="text-danger">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                Please select an Excel file (.xlsx or .xls)
-            </div>
-        `;
-        return;
-    }
-    
-    try {
-        // Show loading state
-        zoneContent.innerHTML = `
-            <div class="text-primary">
-                <i class="bi bi-hourglass-split me-2"></i>
-                Processing ${selectedType} concepts from ${file.name}...
-            </div>
-        `;
-        
-        // Process the file (this will be enhanced in later steps)
-        // For now, just show success
-        zoneContent.innerHTML = `
-            <div class="text-success">
-                <i class="bi bi-check-circle-fill me-2"></i>
-                <strong>${file.name}</strong> loaded successfully
-                <br><small class="text-muted">Ready to import ${selectedType} concepts</small>
-            </div>
-        `;
-        
-        // Show action buttons
-        document.getElementById('action-buttons').style.display = 'block';
-        document.getElementById('remote-save-button').hidden = false;
-        document.getElementById('remote-save-button').disabled = false;
-        document.getElementById('approve-all-button').hidden = false;
-        document.getElementById('approve-all-button').disabled = false;
-        
-    } catch (error) {
-        console.error('Error processing file:', error);
-        zoneContent.innerHTML = `
-            <div class="text-danger">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                Error processing file. Please check the format and try again.
-            </div>
-        `;
     }
 };

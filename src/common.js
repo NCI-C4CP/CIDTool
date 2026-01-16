@@ -1,4 +1,5 @@
 import { getFiles, getConceptsByType } from './api.js';
+import { CONCEPT_TYPE_COLORS } from './config.js';
 
 /**
  * Displays an error message to the user via alert
@@ -258,40 +259,57 @@ export const removeEventListeners = (element) => {
 
 /**
  * Creates an HTML dropdown for selecting reference concepts
+ * Returns HTML string - caller must call initReferenceDropdown() after adding to DOM
+ * 
  * @param {Object} field - The field configuration object
  * @param {string} field.referencesType - The type of concepts to reference
  * @param {boolean} field.required - Whether the field is required
  * @param {string} [prefix=''] - Optional prefix for field ID
- * @param {*} [initialValue=null] - Initial value to set after loading
  * @returns {string} HTML string for the dropdown
  */
-export const createReferenceDropdown = (field, prefix = '', initialValue = null) => {
-    
+export const createReferenceDropdown = (field, prefix = '') => {
     const targetType = field.referencesType;
     const fieldId = prefix ? `${prefix}${field.id}` : field.id;
     
-    // Create loading placeholder initially
-    let dropdownHTML = `
-        <select class="form-select" id="${fieldId}" ${field.required ? 'required' : ''} disabled>
+    // Create loading placeholder - will be populated by initReferenceDropdown
+    return `
+        <select class="form-select" id="${fieldId}" ${field.required ? 'required' : ''} disabled
+                data-reference-type="${targetType}" data-required="${field.required}">
             <option value="">Loading ${targetType} concepts...</option>
         </select>
         <div class="form-text text-info">Fetching available concepts...</div>
     `;
-    
-    // Asynchronously load concepts and update dropdown
-    loadConceptsForDropdown(fieldId, targetType, field.required, initialValue);
-    
-    return dropdownHTML;
 };
 
 /**
- * Asynchronously loads concepts for a dropdown and updates the UI
+ * Initializes a reference dropdown after it has been added to the DOM
+ * Call this after inserting the HTML from createReferenceDropdown
+ * 
+ * @param {string} fieldId - The ID of the select element to initialize
+ * @param {*} [initialValue=null] - Initial value to set after loading
+ */
+export const initReferenceDropdown = (fieldId, initialValue = null) => {
+    const selectElement = document.getElementById(fieldId);
+    if (!selectElement) {
+        console.warn(`initReferenceDropdown: Element not found: ${fieldId}`);
+        return;
+    }
+    
+    const targetType = selectElement.dataset.referenceType;
+    const isRequired = selectElement.dataset.required === 'true';
+    
+    loadConceptsForDropdown(fieldId, targetType, isRequired, initialValue);
+};
+
+/**
+ * Loads concepts for a dropdown and updates the UI
+ * Called after the dropdown element is in the DOM
  * @param {string} fieldId - The field ID to update
  * @param {string} targetType - The concept type to load
  * @param {boolean} isRequired - Whether the field is required
  * @param {*} initialValue - Initial value to set after loading
  */
-const loadConceptsForDropdown = async (fieldId, targetType, isRequired, initialValue = null) => {
+const loadConceptsForDropdown = (fieldId, targetType, isRequired, initialValue = null) => {
     try {
         const conceptFiles = getConceptsByType(targetType);
         
@@ -308,7 +326,10 @@ const loadConceptsForDropdown = async (fieldId, targetType, isRequired, initialV
         const selectElement = document.getElementById(fieldId);
         const helpTextElement = selectElement?.nextElementSibling;
         
-        if (!selectElement) return; // Element not found, likely unmounted
+        if (!selectElement) {
+            console.warn(`Dropdown element not found: ${fieldId}`);
+            return;
+        }
         
         if (referencedConcepts.length === 0) {
             selectElement.innerHTML = `<option value="">No ${targetType} concepts available</option>`;
@@ -354,6 +375,13 @@ const updateStandardDropdown = (fieldId, referencedConcepts, isRequired, initial
     const selectElement = document.getElementById(fieldId);
     if (!selectElement) return;
     
+    console.log(`updateStandardDropdown for ${fieldId}:`, {
+        initialValue,
+        initialValueType: typeof initialValue,
+        numOptions: referencedConcepts.length,
+        options: referencedConcepts.slice(0, 3) // Show first 3 options
+    });
+    
     selectElement.innerHTML = `
         <option value="">${isRequired ? 'Select a concept' : 'None (optional)'}</option>
         ${referencedConcepts.map(option => `
@@ -363,18 +391,25 @@ const updateStandardDropdown = (fieldId, referencedConcepts, isRequired, initial
     selectElement.disabled = false;
     
     // Set initial value if provided
-    if (initialValue) {
-        // Convert stored concept ID back to display format for edit mode
-        const { index } = appState.getState();
-        const matchingFile = Object.keys(index._files || {}).find(fileName => 
-            fileName.replace('.json', '') === initialValue
-        );
-        if (matchingFile) {
-            const displayValue = formatConceptDisplay(matchingFile);
-            selectElement.value = displayValue;
+    if (initialValue !== null && initialValue !== undefined && initialValue !== '') {
+        const initialValueStr = String(initialValue);
+        
+        console.log(`Looking for match: "${initialValueStr}"`);
+        
+        // Find option that contains the concept ID (format: "Key Name - 123456789")
+        const matchingOption = referencedConcepts.find(opt => {
+            const matches = opt.id.endsWith(' - ' + initialValueStr) || 
+                           opt.id.endsWith(initialValueStr) ||
+                           opt.id === initialValueStr;
+            if (matches) console.log(`Found match: "${opt.id}"`);
+            return matches;
+        });
+        
+        if (matchingOption) {
+            selectElement.value = matchingOption.id;
+            console.log(`Set value to: "${matchingOption.id}"`);
         } else {
-            // Fallback: try setting the raw value
-            selectElement.value = initialValue;
+            console.log(`No match found for "${initialValueStr}"`);
         }
     }
 };
@@ -418,21 +453,20 @@ const updateResponseDropdown = (fieldId, referencedConcepts, initialValue = null
     setupResponseDropdownEvents(fieldId);
     
     // Set initial values if provided (for RESPONSE multi-select)
-    if (initialValue && Array.isArray(initialValue)) {
+    if (initialValue && Array.isArray(initialValue) && initialValue.length > 0) {
         setTimeout(() => {
-            const { index } = appState.getState();
             initialValue.forEach(conceptId => {
-                // Convert concept ID to display format to find matching checkbox
-                const matchingFile = Object.keys(index._files || {}).find(fileName => 
-                    fileName.replace('.json', '') === conceptId
-                );
-                if (matchingFile) {
-                    const displayValue = formatConceptDisplay(matchingFile);
-                    const checkbox = document.getElementById(`${fieldId}_${displayValue}`);
-                    if (checkbox) {
+                const conceptIdStr = String(conceptId);
+                
+                // Find checkbox whose value ends with this concept ID (format: "Key - 123456789")
+                const checkboxes = document.querySelectorAll(`input[id^="${fieldId}_"][type="checkbox"]`);
+                checkboxes.forEach(checkbox => {
+                    if (checkbox.value.endsWith(' - ' + conceptIdStr) || 
+                        checkbox.value.endsWith(conceptIdStr) ||
+                        checkbox.value === conceptIdStr) {
                         checkbox.checked = true;
                     }
-                }
+                });
             });
             
             // Trigger update to show pills
@@ -471,9 +505,10 @@ const updateResponseSelection = (fieldId) => {
     
     const selectedValues = Array.from(checkboxes).map(cb => cb.value);
     
-    // Update pills display
+    // Update pills display with RESPONSE color
+    const responseColor = CONCEPT_TYPE_COLORS.RESPONSE?.hex || '#7030A0';
     pillsContainer.innerHTML = selectedValues.map(value => `
-        <span class="badge bg-secondary response-pill">
+        <span class="badge response-pill" style="background-color: ${responseColor}; color: white;">
             ${value}
             <button type="button" class="btn-close btn-close-white ms-1" 
                 onclick="removeResponsePill('${fieldId}', '${value}')"></button>

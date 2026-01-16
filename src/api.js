@@ -16,8 +16,8 @@ import { toBase64, isLocal, appState, fromBase64, isTokenError, showUserNotifica
  * @returns {string} The API base URL
  */
 const getApiBaseUrl = () => {
-    return isLocal() ? API_CONFIG.BASE_URL_LOCAL : API_CONFIG.BASE_URL;
-    // return API_CONFIG.BASE_URL;
+    //return isLocal() ? API_CONFIG.BASE_URL_LOCAL : API_CONFIG.BASE_URL;
+    return API_CONFIG.BASE_URL;
 };
 
 /**
@@ -433,7 +433,7 @@ export const getConfigurationSettings = async () => {
 
 /**
  * Retrieves concepts by their object type from the index
- * Uses the pre-built search index from index.json for instant results
+ * Filters the _files in index.json by object_type
  * @todo THIS ISN'T A LIVE API CALL
  * 
  * @function getConceptsByType
@@ -448,17 +448,16 @@ export const getConfigurationSettings = async () => {
 export const getConceptsByType = (conceptType) => {
     const { index } = appState.getState();
     
-    // Get list of filenames from the pre-built type index
-    const filenames = index._search?.by_type?.[conceptType] || [];
-    
-    // Return in a format compatible with the old API response
-    return {
-        files: filenames.map(filename => ({
+    // Filter files by object_type from the _files index
+    const files = index._files || {};
+    const matchingFiles = Object.entries(files)
+        .filter(([filename, fileData]) => fileData?.object_type === conceptType)
+        .map(([filename, fileData]) => ({
             name: filename,
-            // Include metadata from _files for additional context
-            ...index._files?.[filename]
-        }))
-    };
+            ...fileData
+        }));
+    
+    return { files: matchingFiles };
 };
 
 /**

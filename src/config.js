@@ -34,9 +34,8 @@ export const DOM_ELEMENTS = {
     IMPORT_BUTTON: 'import-button',
     IMPORT_MODAL: 'importModal',
     
-    // Save/Action buttons
-    REMOTE_SAVE_BUTTON: 'remote-save-button',
-    SAVE_BUTTON: 'save-button'
+    // Action buttons
+    REMOTE_SAVE_BUTTON: 'remote-save-button'
 };
 
 /**
@@ -134,4 +133,46 @@ export const MODAL_CONFIG = {
     
     /** File name validation regex */
     ILLEGAL_CHARS_REGEX: /[\\/:*?"<>|]/
+};
+
+/**
+ * Color scheme for concept types
+ * Used for visual consistency across templates and UI
+ * Each type has:
+ *   - hex: Full hex color for CSS
+ *   - rgb: RGB object for Excel styling
+ *   - light: Lighter variant for backgrounds
+ *   - name: Human readable color name
+ */
+export const CONCEPT_TYPE_COLORS = {
+    PRIMARY: {
+        hex: '#4472C4',      // Blue
+        rgb: { r: 68, g: 114, b: 196 },
+        light: '#D6E2F7',
+        name: 'Blue'
+    },
+    SECONDARY: {
+        hex: '#70AD47',      // Green
+        rgb: { r: 112, g: 173, b: 71 },
+        light: '#E2F0D9',
+        name: 'Green'
+    },
+    SOURCE: {
+        hex: '#FFC000',      // Gold/Yellow
+        rgb: { r: 255, g: 192, b: 0 },
+        light: '#FFF2CC',
+        name: 'Gold'
+    },
+    QUESTION: {
+        hex: '#ED7D31',      // Orange
+        rgb: { r: 237, g: 125, b: 49 },
+        light: '#FCE4D6',
+        name: 'Orange'
+    },
+    RESPONSE: {
+        hex: '#7030A0',      // Purple
+        rgb: { r: 112, g: 48, b: 160 },
+        light: '#E4DFEC',
+        name: 'Purple'
+    }
 };

@@ -1,361 +1,467 @@
-import { objectExists, isEmpty, uniqueKeys } from "./common.js";
+/**
+ * Dictionary Processing Module
+ * Handles parsing and structuring spreadsheet data into concept objects
+ * 
+ * @module dictionary
+ * @description Processes imported dictionary spreadsheets and converts them into
+ * structured concept objects that can be saved to the repository. Uses config-driven
+ * field definitions for flexibility.
+ */
+
+import { displayError, appState } from "./common.js";
 import { MODAL_CONFIG } from "./config.js";
 
+// ============================================================================
+// COLUMN PARSING
+// ============================================================================
+
+/**
+ * Parses spreadsheet headers to identify column indices for each concept type
+ * Headers follow the pattern: TYPE_FIELD (e.g., PRIMARY_KEY, SECONDARY_CID)
+ * 
+ * @param {Array<string>} headers - Array of column header strings
+ * @returns {Array<Object>} Array of column mapping objects for each concept type
+ * 
+ * @example
+ * parseColumns(['PRIMARY_KEY', 'PRIMARY_CID', 'SECONDARY_KEY'])
+ * // Returns: [
+ * //   { KEY: 0, CID: 1, object_type: 'PRIMARY' },
+ * //   { KEY: 2, object_type: 'SECONDARY' },
+ * //   ...
+ * // ]
+ */
 export const parseColumns = (headers) => {
-    
-    const keys = ["PRIMARY", "SECONDARY", "SOURCE", "QUESTION", "RESPONSE"];
     const results = [];
 
-    keys.forEach(key => {
+    MODAL_CONFIG.CONCEPT_TYPES.forEach(type => {
+        const columnMap = { object_type: type };
 
-        let result = {}
-
-        headers.forEach(item => {
-            const regex = new RegExp(`^${key}_([a-zA-Z]+)`);
-            const match = item.match(regex);
-            if(match) {
-                result[match[1]] = headers.indexOf(item);
-                console.log();
+        headers.forEach((header, index) => {
+            if (!header || typeof header !== 'string') return;
+            
+            // Match headers like PRIMARY_KEY, SECONDARY_CID, QUESTION_DESCRIPTION
+            const regex = new RegExp(`^${type}_([a-zA-Z]+)$`, 'i');
+            const match = header.match(regex);
+            
+            if (match) {
+                // Store field name (uppercase) -> column index
+                columnMap[match[1].toUpperCase()] = index;
             }
         });
-        
-        result.object_type = key;
-        results.push(result);
+
+        results.push(columnMap);
     });
 
     return results;
-} 
+};
 
-const getExtraKeys = (object) => {
+// ============================================================================
+// DICTIONARY STRUCTURING (IMPORT)
+// ============================================================================
 
-    const keys = ['KEY', 'CID', 'object_type'];
-    let set = new Set(keys);
-    return Object.keys(object).filter(key => !set.has(key));
-}
-
+/**
+ * Main entry point for structuring dictionary data into concept objects
+ * Processes concepts in hierarchical order: PRIMARY → SECONDARY → SOURCE → QUESTION → RESPONSE
+ * 
+ * @param {Array<Object>} mapping - Concept key-to-ID mapping from assignConcepts()
+ * @param {Array<Object>} columns - Column index mapping from parseColumns()
+ * @param {Array<Array>} data - 2D array of spreadsheet data (excluding header row)
+ * @returns {Array<Object>} Array of structured concept objects ready for saving
+ */
 export const structureDictionary = (mapping, columns, data) => {
-
     let conceptObjects = [];
-    
+    const errors = [];
+
+    // Process in hierarchical order - this order matters for reference resolution
     for (const conceptType of MODAL_CONFIG.CONCEPT_TYPES) {
-        conceptObjects = findObjects(mapping, columns, data, conceptType, conceptObjects);
+        try {
+            conceptObjects = processConceptType(mapping, columns, data, conceptType, conceptObjects);
+        } catch (error) {
+            errors.push(`Error processing ${conceptType}: ${error.message}`);
+            console.error(`Error processing ${conceptType}:`, error);
+        }
     }
-    
+
+    if (errors.length > 0) {
+        displayError(`Import completed with errors: ${errors.join('; ')}`);
+    }
+
     return conceptObjects;
-}
+};
 
-export const structureFiles = (data) => {
-
-    const primaryObjects = data.filter(x => x.object_type === "PRIMARY");
-    const secondaryObjects = data.filter(x => x.object_type === "SECONDARY");
-    const sourceObjects = data.filter(x => x.object_type === "SOURCE");
-    const questionObjects = data.filter(x => x.object_type === "QUESTION");
-    const responseObjects = data.filter(x => x.object_type === "RESPONSE");
-
-    const primaryKeys = uniqueKeys(primaryObjects);
-    const secondaryKeys = uniqueKeys(secondaryObjects);
-    const sourceKeys = uniqueKeys(sourceObjects);
-    const questionKeys = uniqueKeys(questionObjects);
-    const responseKeys = uniqueKeys(responseObjects);
-
-    let dictionaryArray = [];
-
-    dictionaryArray = filesToArray(primaryObjects, primaryKeys, "Primary", dictionaryArray);
-    dictionaryArray = filesToArray(secondaryObjects, secondaryKeys, "Secondary", dictionaryArray);
-    dictionaryArray = filesToArray(questionObjects, questionKeys, "Question", dictionaryArray);
-    dictionaryArray = filesToArray(sourceObjects, sourceKeys, "Source", dictionaryArray);
-
-    dictionaryArray = sortDictionaryArray(dictionaryArray);
-
-    dictionaryArray = filesToArray(responseObjects, responseKeys, "Response", dictionaryArray);
-
-    return dictionaryArray;
-}
-
-const findObjects = (mapping, columns, data, objectType, conceptObjects) => {
-
-    const primaryColumns = columns.find(x => x.object_type === objectType);
-    const keyColumn = primaryColumns.KEY;
-    const extraColumns = getExtraKeys(primaryColumns);
-
-    for (let row = 0; row <= data.length - 1; row++) {
-        if(data[row][keyColumn]) {
-            if(!objectExists(conceptObjects, 'key', data[row][keyColumn])) {
-                
-                let fields = {};
-
-                if(extraColumns.length > 0) {
-                    extraColumns.forEach(ec => {
-                        if(data[row][primaryColumns[ec]] !== undefined) {
-                            fields[`${ec}`] = data[row][primaryColumns[ec]];
-                        }
-                    })
-                }
-
-                if(objectType === 'SECONDARY' || objectType === 'QUESTION') {
-
-                    const parentKeyColumn = objectType === 'SECONDARY' ? columns.find(x => x.object_type === 'PRIMARY').KEY : columns.find(x => x.object_type === 'SECONDARY').KEY;
-
-                    for(let i = row; i >= 0; i--) {
-                        if(data[i][parentKeyColumn]) {
-                            fields.parent = mapping.filter(x => x.concept === data[i][parentKeyColumn])[0].id
-                            break;
-                        }
-                    }
-                }
-
-                if(objectType === 'QUESTION') {
-                    
-                    const sourceKeyColumn = columns.find(x => x.object_type === 'SOURCE').KEY;
-                    
-                    if(data[row][sourceKeyColumn]) {
-                        fields.source = mapping.filter(x => x.concept === data[row][sourceKeyColumn])[0].id
-                    }
-
-                    const responseColumns = columns.find(x => x.object_type === 'RESPONSE');
-                    
-                    let responses = {};
-                    let count = 0;
-                    do {
-                        if(data[row + count][responseColumns.KEY]) {
-                            const responseIndex = data[row + count][responseColumns.VALUE];
-                            const responseConcept = conceptObjects.find(x => x.key === data[row + count][responseColumns.KEY]).conceptID;
-
-                            responses[responseIndex] = responseConcept;
-
-                            count++;
-                        }
-                    } while (data[row + count] && !data[row + count]?.[keyColumn]);
-
-                    fields.responses = responses;
-
-
-                }
-
-                if(objectType === 'RESPONSE') {
-                    if(fields.VALUE !== undefined) delete fields.VALUE;
-                }
-
-                conceptObjects.push(buildObject(mapping, data[row][keyColumn], fields, objectType));
-            }  
-        }
-    }
+/**
+ * Processes all concepts of a specific type from the spreadsheet
+ * 
+ * @param {Array<Object>} mapping - Key-to-ID mapping
+ * @param {Array<Object>} columns - Column mappings for all types
+ * @param {Array<Array>} data - Spreadsheet data rows
+ * @param {string} objectType - Concept type to process (PRIMARY, SECONDARY, etc.)
+ * @param {Array<Object>} conceptObjects - Accumulated concept objects from previous types
+ * @returns {Array<Object>} Updated conceptObjects array with new concepts added
+ */
+const processConceptType = (mapping, columns, data, objectType, conceptObjects) => {
+    const { config } = appState.getState();
+    const typeColumns = columns.find(c => c.object_type === objectType);
+    const typeConfig = config?.[objectType] || [];
     
+    // KEY column is required for any concept type
+    const keyColumn = typeColumns?.KEY;
+    if (keyColumn === undefined) {
+        console.warn(`No KEY column found for ${objectType}, skipping`);
+        return conceptObjects;
+    }
+
+    // Track processed keys to avoid duplicates
+    const processedKeys = new Set();
+
+    for (let rowIndex = 0; rowIndex < data.length; rowIndex++) {
+        const row = data[rowIndex];
+        const keyValue = getCellValue(row, keyColumn);
+
+        // Skip if no key value or already processed
+        if (!keyValue || processedKeys.has(keyValue)) {
+            continue;
+        }
+
+        processedKeys.add(keyValue);
+
+        // Build the concept object
+        const concept = buildConceptObject(
+            mapping,
+            columns,
+            data,
+            rowIndex,
+            keyValue,
+            objectType,
+            typeColumns,
+            typeConfig,
+            conceptObjects
+        );
+
+        if (concept) {
+            conceptObjects.push(concept);
+        }
+    }
+
     return conceptObjects;
-}
+};
 
-const buildObject = (mapping, value, fields, type) => {
-
-    let conceptObject = {};
-    let id = mapping.filter(x => x.concept === value)[0].id;
-
-    conceptObject['key'] = value;
-    conceptObject['conceptID'] = id;
-    conceptObject['object_type'] = type;
-
-    if(fields && !isEmpty(fields)) {
-        Object.keys(fields).forEach(field => {
-            conceptObject[`${field.toLowerCase()}`] = fields[field];
-        });
+/**
+ * Builds a single concept object with all its fields
+ * 
+ * @param {Array<Object>} mapping - Key-to-ID mapping
+ * @param {Array<Object>} columns - All column mappings
+ * @param {Array<Array>} data - Spreadsheet data
+ * @param {number} rowIndex - Current row being processed
+ * @param {string} keyValue - The concept's key value
+ * @param {string} objectType - Type of concept being built
+ * @param {Object} typeColumns - Column mapping for this concept type
+ * @param {Array<Object>} typeConfig - Field configuration from config.js
+ * @param {Array<Object>} conceptObjects - Already processed concepts (for reference lookups)
+ * @returns {Object|null} Structured concept object or null if invalid
+ */
+const buildConceptObject = (mapping, columns, data, rowIndex, keyValue, objectType, typeColumns, typeConfig, conceptObjects) => {
+    // Get concept ID from mapping
+    const mappingEntry = mapping.find(m => m.concept === keyValue);
+    if (!mappingEntry) {
+        console.warn(`No mapping found for concept: ${keyValue}`);
+        return null;
     }
 
-    return conceptObject;
-}
+    // Start with required fields
+    const concept = {
+        key: keyValue,
+        conceptID: mappingEntry.id,
+        object_type: objectType
+    };
 
-const filesToArray = (objects, keys, type, dictionaryArray) => {
-
-    let headers;
-    let fieldToIndex = {};
-
-    let typeMapping = {
-        'Secondary': 'Primary Concept ID',
-        'Question': 'Secondary Concept ID'
-    }
-
-    if(keys.includes('responses')) {
-        keys = keys.filter(x => x !== 'responses');
-        keys.push('responses');
-    }
-
-    if(dictionaryArray.length === 0) {
-        dictionaryArray.push([]);
-    }
-
-    headers = dictionaryArray[0];
-
-    if(type === 'Source') {
-        let sourceIndex = headers.indexOf('source');
-        dictionaryArray[0][sourceIndex] = 'Source Concept ID';
-        keys = keys.filter(x => x !== 'conceptID');
-
-        for(let i = 0; i < dictionaryArray.length; i++) {
-            dictionaryArray[i].splice(sourceIndex, 0, "");
+    // Process extra columns from spreadsheet (non-reference fields)
+    const extraColumns = getExtraKeys(typeColumns);
+    extraColumns.forEach(fieldKey => {
+        const columnIndex = typeColumns[fieldKey];
+        const value = getCellValue(data[rowIndex], columnIndex);
+        
+        if (value !== undefined && value !== null && value !== '') {
+            // Store with lowercase key to match config field ids
+            concept[fieldKey.toLowerCase()] = value;
         }
-
-        dictionaryArray[0][sourceIndex] = 'Source Key';
-        keys = keys.filter(x => x !== 'key');
-        fieldToIndex['key'] = sourceIndex;
-        fieldToIndex['conceptID'] = sourceIndex + 1;
-
-        for(let i = 1; i < dictionaryArray.length; i++) {
-            if(dictionaryArray[i][fieldToIndex['conceptID']]) {
-                let targetObject = objects.filter(x => x.conceptID === dictionaryArray[i][fieldToIndex['conceptID']]);
-                
-                if(targetObject.length === 1) {
-                    dictionaryArray[i][fieldToIndex['key']] = targetObject[0].key;
-                }
-            }
-        }
-
-        // add other key headers
-
-        return dictionaryArray;
-    }
-
-    if(type === 'Response') {
-
-        fieldToIndex['key'] = headers.length - 1;
-        dictionaryArray[0][headers.length - 1] = 'Response Key';
-        keys = keys.filter(x => x !== 'key');
-
-        fieldToIndex['value'] = headers.length;
-        headers.push(type + ' Value');
-        keys = keys.filter(x => x !== 'value');
-
-        fieldToIndex['conceptID'] = headers.length;
-        headers.push(type + ' Concept ID');
-        keys = keys.filter(x => x !== 'conceptID');
-
-
-        for(let i = dictionaryArray.length - 1; i > 0; i--) {
-            if(dictionaryArray[i][fieldToIndex['key']]) {
-                let responsesObject = JSON.parse(dictionaryArray[i][fieldToIndex['key']]);
-                let responseKeys = Object.keys(responsesObject);
-
-                let first = true;
-                for(let j = 0; j < responseKeys.length; j++) {
-                    if(!first) {
-                        dictionaryArray.splice(i + j, 0, new Array(headers.length));
-                    }
-
-                    let object = objects.filter(x => x.conceptID === responsesObject[responseKeys[j]]);
-                    if(object.length === 1) {
-                        dictionaryArray[i + j][fieldToIndex['key']] = object[0].key;
-                        dictionaryArray[i + j][fieldToIndex['value']] = responseKeys[j];
-                        dictionaryArray[i + j][fieldToIndex['conceptID']] = object[0].conceptID;
-                    }
-
-                    first = false;
-                }
-            }
-        }
-
-        // add other response key headers
-
-        return dictionaryArray;
-    }
-
-    if(keys.includes('source')) {
-        fieldToIndex['source'] = headers.length;
-        headers.push('source');
-        keys = keys.filter(x => x !== 'source');
-    }
-
-    if(keys.includes('key')) {
-        fieldToIndex['key'] = headers.length;
-        headers.push(type + ' Key');
-        keys = keys.filter(x => x !== 'key');
-    }
-
-    if(keys.includes('conceptID')) {
-        fieldToIndex['conceptID'] = headers.length;
-        headers.push(type + ' Concept ID');
-        keys = keys.filter(x => x !== 'conceptID');
-    }
-
-    if(keys.includes('parent')) {
-        keys = keys.filter(x => x !== 'parent');
-    }
-
-    for(let key of keys) {
-        fieldToIndex[`${key}`] = headers.length;
-        headers.push(key);
-    }
-
-    let mappingKeys = Object.keys(fieldToIndex);
-
-    if(typeMapping[type]) {
-        const columnIndex = dictionaryArray[0].findIndex(item => item === typeMapping[type]);
-        let columnValues = dictionaryArray.map(row => row[columnIndex]);
-        columnValues.shift();
-        const uniqueValues = [...new Set(columnValues)];
-
-        for(const uniqueValue of uniqueValues) {
-
-            let rows = [];
-
-            let matchingObjects = objects.filter(x => x['parent'] === uniqueValue);
-
-            let insertIndex = dictionaryArray.findIndex(row => row[columnIndex] === uniqueValue)
-            let lineTemplate = dictionaryArray[insertIndex];
-
-            if(lineTemplate.length < headers.length) {
-                lineTemplate.length = headers.length;
-            }
-
-            for(const object of matchingObjects) {
-                let line = lineTemplate.slice();
-
-                for(const mappingKey of mappingKeys) {
-                    if(typeof object[mappingKey] === 'object') {
-                        if(!isEmpty(object[mappingKey])) {
-                            line[fieldToIndex[mappingKey]] = JSON.stringify(object[mappingKey]);
-                        }
-                    }
-                    else {
-                        line[fieldToIndex[mappingKey]] = object[mappingKey];
-                    }
-                }
-
-                rows.push(line);
-
-            }
-
-            dictionaryArray = [
-                ...dictionaryArray.slice(0, insertIndex),
-                ...rows,
-                ...dictionaryArray.slice(insertIndex + 1)
-            ];
-
-            console.log();
-        }
-    }
-    else {
-        for(const object of objects) {
-            let line = new Array(headers.length);
-            for(const mappingKey of mappingKeys) {
-                line[fieldToIndex[mappingKey]] = object[mappingKey];
-            }
-            dictionaryArray.push(line);
-        }
-    }
-
-    return dictionaryArray;
-}
-
-const sortDictionaryArray = (dictionaryArray) => {
-
-    const primaryConcept = dictionaryArray[0].findIndex(item => item === 'Primary Concept ID');
-    const secondaryConcept = dictionaryArray[0].findIndex(item => item === 'Secondary Concept ID');
-    const sourceConcept = dictionaryArray[0].findIndex(item => item === 'Source Concept ID');
-
-    dictionaryArray.sort((a, b) => {
-        if (a[primaryConcept] !== b[primaryConcept]) return a[primaryConcept] - b[primaryConcept];
-        if (a[secondaryConcept] !== b[secondaryConcept]) return a[secondaryConcept] - b[secondaryConcept];
-        if (a[sourceConcept] !== b[sourceConcept]) return a[sourceConcept] - b[sourceConcept];
-
-        return 0;
     });
 
-    return dictionaryArray;
-}
+    // Handle hierarchical reference fields based on type
+    addHierarchicalReferences(concept, mapping, columns, data, rowIndex, objectType, conceptObjects);
+
+    // Clean up internal fields that shouldn't be in final object
+    if (concept.value !== undefined) {
+        delete concept.value; // VALUE is only used for response ordering
+    }
+
+    return concept;
+};
+
+/**
+ * Adds hierarchical reference fields (parent, source, responses) based on row position
+ * Uses config to determine the correct field names for each reference type
+ * 
+ * @param {Object} concept - The concept object being built
+ * @param {Array<Object>} mapping - Key-to-ID mapping
+ * @param {Array<Object>} columns - All column mappings
+ * @param {Array<Array>} data - Spreadsheet data
+ * @param {number} rowIndex - Current row index
+ * @param {string} objectType - Type of concept
+ * @param {Array<Object>} conceptObjects - Already processed concepts
+ */
+const addHierarchicalReferences = (concept, mapping, columns, data, rowIndex, objectType, conceptObjects) => {
+    const { config } = appState.getState();
+    const typeConfig = config?.[objectType] || [];
+    const row = data[rowIndex];
+
+    // Find all reference fields in the config for this type
+    const referenceFields = typeConfig.filter(field => field.type === 'reference');
+
+    referenceFields.forEach(field => {
+        const referencesType = field.referencesType;
+        const fieldId = field.id;
+
+        if (!referencesType) return;
+
+        // Handle RESPONSE references specially (look forward, build array)
+        if (referencesType === 'RESPONSE') {
+            const responses = collectResponses(mapping, columns, data, rowIndex, conceptObjects);
+            if (responses && responses.length > 0) {
+                concept[fieldId] = responses;
+            }
+            return;
+        }
+
+        // For PRIMARY and SECONDARY references, look backwards for nearest match
+        if (referencesType === 'PRIMARY' || referencesType === 'SECONDARY') {
+            const parentId = findParentConceptId(mapping, columns, data, rowIndex, referencesType);
+            if (parentId) {
+                concept[fieldId] = parentId;
+            }
+            return;
+        }
+
+        // For SOURCE references, check same row
+        if (referencesType === 'SOURCE') {
+            const sourceColumns = columns.find(c => c.object_type === 'SOURCE');
+            if (sourceColumns?.KEY !== undefined) {
+                const sourceKey = getCellValue(row, sourceColumns.KEY);
+                if (sourceKey) {
+                    const sourceMapping = mapping.find(m => m.concept === sourceKey);
+                    if (sourceMapping) {
+                        concept[fieldId] = sourceMapping.id;
+                    }
+                }
+            }
+            return;
+        }
+
+        // For any other reference types, try to find by looking backwards
+        const refId = findParentConceptId(mapping, columns, data, rowIndex, referencesType);
+        if (refId) {
+            concept[fieldId] = refId;
+        }
+    });
+};
+
+/**
+ * Finds the parent concept ID by looking backwards through the data
+ * 
+ * @param {Array<Object>} mapping - Key-to-ID mapping
+ * @param {Array<Object>} columns - Column mappings
+ * @param {Array<Array>} data - Spreadsheet data
+ * @param {number} currentRow - Current row index
+ * @param {string} parentType - Type of parent to find (PRIMARY or SECONDARY)
+ * @returns {number|null} Parent concept ID or null if not found
+ */
+const findParentConceptId = (mapping, columns, data, currentRow, parentType) => {
+    const parentColumns = columns.find(c => c.object_type === parentType);
+    const parentKeyColumn = parentColumns?.KEY;
+
+    if (parentKeyColumn === undefined) {
+        return null;
+    }
+
+    // Look backwards from current row to find nearest parent
+    for (let i = currentRow; i >= 0; i--) {
+        const parentKey = getCellValue(data[i], parentKeyColumn);
+        if (parentKey) {
+            const parentMapping = mapping.find(m => m.concept === parentKey);
+            if (parentMapping) {
+                return parentMapping.id;
+            }
+        }
+    }
+
+    return null;
+};
+
+/**
+ * Collects RESPONSE concepts that belong to the current QUESTION
+ * Looks forward until the next QUESTION is found
+ * Uses mapping instead of conceptObjects since RESPONSEs are processed after QUESTIONs
+ * Returns an array of concept IDs to match the format used by the GUI
+ * 
+ * @param {Array<Object>} mapping - Key-to-ID mapping (already has all concept IDs assigned)
+ * @param {Array<Object>} columns - Column mappings
+ * @param {Array<Array>} data - Spreadsheet data
+ * @param {number} questionRow - Row index of the QUESTION
+ * @param {Array<Object>} conceptObjects - Processed concepts (not used, kept for signature compatibility)
+ * @returns {Array} Array of response concept IDs (matches GUI format)
+ */
+const collectResponses = (mapping, columns, data, questionRow, conceptObjects) => {
+    const questionColumns = columns.find(c => c.object_type === 'QUESTION');
+    const responseColumns = columns.find(c => c.object_type === 'RESPONSE');
+    
+    const questionKeyColumn = questionColumns?.KEY;
+    const responseKeyColumn = responseColumns?.KEY;
+
+    if (responseKeyColumn === undefined) {
+        return [];
+    }
+
+    const responses = [];
+
+    // Start from the question row and look forward
+    for (let i = questionRow; i < data.length; i++) {
+        // Stop if we hit another QUESTION (but not on the first row)
+        if (i > questionRow && questionKeyColumn !== undefined) {
+            const nextQuestionKey = getCellValue(data[i], questionKeyColumn);
+            if (nextQuestionKey) {
+                break;
+            }
+        }
+
+        // Check for RESPONSE on this row
+        const responseKey = getCellValue(data[i], responseKeyColumn);
+        if (responseKey) {
+            // Find the response in mapping (which has all IDs assigned already)
+            const responseMapping = mapping.find(m => m.concept === responseKey);
+
+            if (responseMapping) {
+                responses.push(responseMapping.id);
+            }
+        }
+    }
+
+    return responses;
+};
+
+// ============================================================================
+// FILE EXPORT (JSON → SPREADSHEET)
+// ============================================================================
+
+/**
+ * Converts an array of JSON concept files back into spreadsheet format
+ * Used when exporting concepts from the repository to a spreadsheet
+ * 
+ * @param {Array<Object>} data - Array of concept objects from JSON files
+ * @returns {Array<Array>} 2D array suitable for spreadsheet export
+ */
+export const structureFiles = (data) => {
+    // Group concepts by type
+    const conceptsByType = {};
+    MODAL_CONFIG.CONCEPT_TYPES.forEach(type => {
+        conceptsByType[type] = data.filter(x => x.object_type === type);
+    });
+
+    // Build header row dynamically based on config
+    const { config } = appState.getState();
+    const headers = [];
+    const columnMapping = {}; // Maps type_field to column index
+
+    MODAL_CONFIG.CONCEPT_TYPES.forEach(type => {
+        const typeConfig = config?.[type] || [];
+        
+        // Always add KEY and CID columns
+        columnMapping[`${type}_KEY`] = headers.length;
+        headers.push(`${type}_KEY`);
+        
+        columnMapping[`${type}_CID`] = headers.length;
+        headers.push(`${type}_CID`);
+
+        // Add extra fields from config (excluding references which are positional)
+        typeConfig.forEach(field => {
+            if (field.type !== 'reference' && field.id !== 'key' && field.id !== 'conceptID') {
+                columnMapping[`${type}_${field.id.toUpperCase()}`] = headers.length;
+                headers.push(`${type}_${field.id.toUpperCase()}`);
+            }
+        });
+    });
+
+    // Build data rows
+    // Note: This is a simplified implementation - full reconstruction of 
+    // hierarchical structure from parent references would be more complex
+    const rows = [headers];
+    
+    // For now, just output concepts in type order
+    // A full implementation would reconstruct the positional hierarchy
+    MODAL_CONFIG.CONCEPT_TYPES.forEach(type => {
+        conceptsByType[type].forEach(concept => {
+            const row = new Array(headers.length).fill('');
+            
+            // Set KEY
+            const keyCol = columnMapping[`${type}_KEY`];
+            if (keyCol !== undefined) row[keyCol] = concept.key || '';
+            
+            // Set CID
+            const cidCol = columnMapping[`${type}_CID`];
+            if (cidCol !== undefined) row[cidCol] = concept.conceptID || '';
+            
+            // Set other fields
+            Object.keys(concept).forEach(field => {
+                if (field === 'key' || field === 'conceptID' || field === 'object_type') return;
+                if (field === 'parent' || field === 'source' || field === 'responses') return;
+                
+                const colKey = `${type}_${field.toUpperCase()}`;
+                const colIndex = columnMapping[colKey];
+                if (colIndex !== undefined) {
+                    row[colIndex] = concept[field];
+                }
+            });
+            
+            rows.push(row);
+        });
+    });
+
+    return rows;
+};
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Safely gets a cell value, handling undefined/null/empty cases
+ * 
+ * @param {Array} row - Row array
+ * @param {number} columnIndex - Column index to access
+ * @returns {*} Cell value or undefined
+ */
+const getCellValue = (row, columnIndex) => {
+    if (!row || columnIndex === undefined || columnIndex < 0) {
+        return undefined;
+    }
+    
+    const value = row[columnIndex];
+    
+    // Treat empty strings as undefined
+    if (value === '' || value === null) {
+        return undefined;
+    }
+    
+    return value;
+};
+
+/**
+ * Gets extra field keys from a column mapping (excludes standard fields)
+ * These are additional fields defined in the spreadsheet beyond KEY/CID
+ * 
+ * @param {Object} columnMap - Column mapping object
+ * @returns {Array<string>} Array of extra field keys (uppercase)
+ */
+const getExtraKeys = (columnMap) => {
+    const standardKeys = new Set(['KEY', 'CID', 'object_type']);
+    return Object.keys(columnMap).filter(key => !standardKeys.has(key));
+};
