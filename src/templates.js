@@ -582,6 +582,9 @@ export const HOMEPAGE_TEMPLATES = {
                         <button id="rebuildIndexButton" class="btn btn-outline-warning me-2" title="Rebuild Index">
                             <i class="bi bi-arrow-repeat"></i><span class="btn-text ms-1">Rebuild</span>
                         </button>
+                        <button id="resetRepoButton" class="btn btn-outline-danger me-2" title="Reset Repository - Delete All Concepts">
+                            <i class="bi bi-trash"></i><span class="btn-text ms-1">Reset</span>
+                        </button>
                         <button id="downloadRepo" class="btn btn-primary" title="Download Repository">
                             <i class="bi bi-download"></i><span class="btn-text ms-1">Download</span>
                         </button>

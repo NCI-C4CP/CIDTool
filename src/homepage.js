@@ -13,7 +13,7 @@
  */
 
 import { appState, executeWithAnimation, fromBase64, showUserNotification, getErrorMessage, showAnimation, hideAnimation } from './common.js';
-import { getFiles, getRepoContents, getUserRepositories, getConfigurationSettings, rebuildIndex } from './api.js';
+import { getFiles, getRepoContents, getUserRepositories, getConfigurationSettings, rebuildIndex, deleteFile } from './api.js';
 import { renderAddModal, renderDeleteModal, renderAddFolderModal, renderViewModal, renderConfigModal } from './modals.js';
 import { generateSpreadsheet } from './files.js';
 import { structureFiles } from './dictionary.js';
@@ -164,7 +164,8 @@ const renderSearchBar = () => {
         directoryBack,
         renderConfigModal,
         handleDownloadRepo,
-        handleRebuildIndex
+        handleRebuildIndex,
+        handleResetRepository
     );
 };
 
@@ -368,6 +369,106 @@ export const handleRebuildIndex = async (refreshHomePage) => {
     } catch (error) {
         console.error('Error rebuilding index:', error);
         showUserNotification('error', `Failed to rebuild index: ${getErrorMessage(error)}`);
+    } finally {
+        // Hide loading animation
+        hideAnimation();
+    }
+};
+
+/**
+ * Handles resetting the repository by deleting all concept files
+ * 
+ * @async
+ * @function handleResetRepository
+ * @param {Function} refreshHomePage - Function to refresh the homepage after reset
+ * @description Deletes all concept JSON files in the repository (excludes config.json, index.json, .gitkeep)
+ * 
+ * @throws {Error} If deletion fails or API call fails
+ */
+export const handleResetRepository = async (refreshHomePage) => {
+    try {
+        const { files, index } = appState.getState();
+        
+        // Get all concept files from the index (these are the JSON files we want to delete)
+        const conceptFiles = index._files ? Object.keys(index._files) : [];
+        
+        if (conceptFiles.length === 0) {
+            showUserNotification('info', 'No concept files to delete.');
+            return;
+        }
+
+        // Confirm with user before deleting - this is destructive!
+        const confirmed = confirm(
+            `⚠️ WARNING: This will permanently delete ALL ${conceptFiles.length} concept files in this repository!\n\n` +
+            `This action cannot be undone.\n\n` +
+            `Are you sure you want to continue?`
+        );
+        
+        if (!confirmed) {
+            return;
+        }
+
+        // Double confirm for safety
+        const doubleConfirmed = confirm(
+            `FINAL CONFIRMATION:\n\n` +
+            `You are about to delete ${conceptFiles.length} files.\n\n` +
+            `Type OK to proceed.`
+        );
+        
+        if (!doubleConfirmed) {
+            return;
+        }
+
+        // Show loading animation
+        showAnimation();
+        
+        let deletedCount = 0;
+        let failedCount = 0;
+        const errors = [];
+
+        // Delete each concept file
+        for (const fileName of conceptFiles) {
+            try {
+                // Get the file's SHA (needed for deletion)
+                const fileResponse = await getFiles(fileName);
+                const sha = fileResponse.data.sha;
+                
+                await deleteFile(fileName, sha);
+                deletedCount++;
+                
+                // Update progress in console
+                console.log(`Deleted ${deletedCount}/${conceptFiles.length}: ${fileName}`);
+            } catch (error) {
+                failedCount++;
+                errors.push(`${fileName}: ${error.message}`);
+                console.error(`Failed to delete ${fileName}:`, error);
+            }
+        }
+
+        // Show results
+        if (failedCount === 0) {
+            showUserNotification('success', `Successfully deleted all ${deletedCount} concept files!`);
+        } else {
+            showUserNotification('warning', `Deleted ${deletedCount} files. Failed to delete ${failedCount} files.`);
+            console.error('Failed deletions:', errors);
+        }
+
+        // Rebuild the index after deletion
+        try {
+            await rebuildIndex();
+            showUserNotification('success', 'Index rebuilt after reset.');
+        } catch (indexError) {
+            console.error('Failed to rebuild index:', indexError);
+        }
+
+        // Refresh the page
+        if (refreshHomePage) {
+            await refreshHomePage();
+        }
+        
+    } catch (error) {
+        console.error('Error resetting repository:', error);
+        showUserNotification('error', `Failed to reset repository: ${getErrorMessage(error)}`);
     } finally {
         // Hide loading animation
         hideAnimation();
