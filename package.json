@@ -1,0 +1,23 @@
+{
+  "name": "cidtool",
+  "version": "1.0.0",
+  "description": "Concept ID Tool for managing concept dictionaries",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test:verbose": "node --experimental-vm-modules node_modules/jest/bin/jest.js --verbose"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "keywords": [
+    "concept",
+    "dictionary",
+    "github",
+    "management"
+  ],
+  "license": "MIT"
+}
