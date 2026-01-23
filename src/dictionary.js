@@ -169,10 +169,12 @@ const buildConceptObject = (mapping, columns, data, rowIndex, keyValue, objectTy
     }
 
     // Start with required fields
+    // _sourceRow is internal tracking for validation (row in spreadsheet, 1-indexed + 1 for header)
     const concept = {
         key: keyValue,
         conceptID: mappingEntry.id,
-        object_type: objectType
+        object_type: objectType,
+        _sourceRow: rowIndex + 2 // +2: 1-indexed and +1 for header row
     };
 
     // Process extra columns from spreadsheet (non-reference fields)

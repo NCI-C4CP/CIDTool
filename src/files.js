@@ -1,5 +1,5 @@
 import { parseColumns, structureDictionary, structureFiles } from "./dictionary.js";
-import { assignConcepts } from "./concepts.js";
+import { assignConcepts, validateImportData } from "./concepts.js";
 import { appState, removeEventListeners, showAnimation, hideAnimation } from "./common.js";
 import { renderUploadModal } from "./modals.js";
 import { MODAL_CONFIG, CONCEPT_TYPE_COLORS } from "./config.js";
@@ -177,8 +177,19 @@ const processDictionaryFile = async (file) => {
         // Remove header row for processing
         const dataRows = data.slice(1);
         
-        // Validate and create concept mapping
-        const mapping = assignConcepts(columns, dataRows);
+        // Get existing repository data for validation and ID generation
+        const { index, config } = appState.getState();
+        
+        // Build set of existing Concept IDs to avoid collisions during auto-generation
+        const existingRepoIds = new Set(
+            Object.values(index?._files || {})
+                .map(file => file.conceptID)
+                .filter(id => id !== undefined && id !== null)
+                .map(id => String(id)) // Normalize to strings for comparison
+        );
+        
+        // Validate and create concept mapping (passes existing IDs to avoid collisions)
+        const mapping = assignConcepts(columns, dataRows, existingRepoIds);
         
         if (!mapping) {
             showValidationError(['Failed to create concept mapping. Please check your data format.']);
@@ -195,6 +206,9 @@ const processDictionaryFile = async (file) => {
             return;
         }
         
+        // Validate import data against existing repository
+        const validationResult = validateImportData(conceptObjects, index, config);
+        
         // Store all parsed data in app state for review before import
         // This allows inspection of the import before committing
         appState.setState({ 
@@ -202,17 +216,34 @@ const processDictionaryFile = async (file) => {
             importFileName: file.name,
             importMapping: mapping,   // Key-to-ID mapping with auto-generated IDs
             importColumns: columns,   // Column index mapping
-            importRawData: dataRows   // Original spreadsheet data (sans header)
+            importRawData: dataRows,  // Original spreadsheet data (sans header)
+            importValidation: validationResult // Validation results
         });
         
         console.log('Import data stored in appState for review:', {
             conceptCount: conceptObjects.length,
             mappingCount: mapping.length,
             columns: columns,
-            fileName: file.name
+            fileName: file.name,
+            validation: validationResult
         });
         
-        // Show success and summary
+        // Display import summary (includes validation results)
+        showImportSummary(conceptObjects, validationResult);
+        
+        // If validation failed, show errors and don't enable import
+        if (!validationResult.valid) {
+            zoneContent.innerHTML = `
+                <div class="text-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>${file.name}</strong> has validation errors
+                </div>
+            `;
+            // Don't enable import button - user needs to fix errors
+            return;
+        }
+        
+        // Show success 
         zoneContent.innerHTML = `
             <div class="text-success">
                 <i class="bi bi-check-circle-fill me-2"></i>
@@ -220,10 +251,7 @@ const processDictionaryFile = async (file) => {
             </div>
         `;
         
-        // Display import summary
-        showImportSummary(conceptObjects);
-        
-        // Enable import button
+        // Enable import button only if validation passed
         setupImportButton(conceptObjects);
         
     } catch (error) {
@@ -260,10 +288,11 @@ const hideValidationErrors = () => {
 }
 
 /**
- * Shows import summary with concept counts using color-coded display
+ * Shows import summary with concept counts and validation results
  * @param {Array} conceptObjects - Array of concept objects
+ * @param {Object} validationResult - Validation result from validateImportData
  */
-const showImportSummary = (conceptObjects) => {
+const showImportSummary = (conceptObjects, validationResult = null) => {
     const importSummary = document.getElementById('import-summary');
     const summaryContent = document.getElementById('import-summary-content');
     
@@ -275,8 +304,10 @@ const showImportSummary = (conceptObjects) => {
         counts[type] = conceptObjects.filter(c => c.object_type === type).length;
     });
     
-    // Build summary HTML with color-coded pills
-    const summaryHtml = `
+    const hasErrors = validationResult && !validationResult.valid;
+    
+    // Build concept counts HTML with color-coded pills
+    let summaryHtml = `
         <div class="d-flex flex-wrap justify-content-center gap-2 mb-3">
             ${MODAL_CONFIG.CONCEPT_TYPES.map(type => `
                 <div class="import-summary-type concept-type-${type.toLowerCase()}${counts[type] === 0 ? ' opacity-50' : ''}">
@@ -285,13 +316,147 @@ const showImportSummary = (conceptObjects) => {
                 </div>
             `).join('')}
         </div>
-        <div class="text-center">
-            <strong>Total: ${conceptObjects.length} concepts</strong> ready to import
+        <div class="text-center mb-2">
+            <strong>Total: ${conceptObjects.length} concepts</strong> found in file
         </div>
     `;
     
+    // If validation passed, show success message
+    if (!hasErrors) {
+        summaryHtml += `
+            <div class="text-center text-success">
+                <i class="bi bi-check-circle me-1"></i> All validation checks passed - ready to import
+            </div>
+        `;
+    } else {
+        // Show error summary and detailed error list
+        summaryHtml += buildValidationErrorsHtml(validationResult);
+    }
+    
     summaryContent.innerHTML = summaryHtml;
+    
+    // Update alert class based on validation status
+    const alertDiv = importSummary.querySelector('.alert');
+    if (alertDiv) {
+        alertDiv.classList.remove('alert-info', 'alert-danger', 'alert-warning');
+        alertDiv.classList.add(hasErrors ? 'alert-danger' : 'alert-info');
+        
+        // Update icon and title
+        const titleEl = alertDiv.querySelector('h6');
+        if (titleEl) {
+            titleEl.innerHTML = hasErrors 
+                ? '<i class="bi bi-exclamation-triangle"></i> Import Blocked - Errors Found'
+                : '<i class="bi bi-list-check"></i> Import Summary';
+        }
+    }
+    
     importSummary.style.display = 'block';
+}
+
+/**
+ * Builds HTML for displaying validation errors in a user-friendly format
+ * @param {Object} validationResult - Validation result with errors array
+ * @returns {string} HTML string for error display
+ */
+const buildValidationErrorsHtml = (validationResult) => {
+    const { errors, summary } = validationResult;
+    
+    // Group errors by type for better organization
+    const errorsByType = {
+        duplicateIds: errors.filter(e => e.type.includes('DUPLICATE_CONCEPT_ID')),
+        duplicateKeys: errors.filter(e => e.type.includes('DUPLICATE_KEY')),
+        missingFields: errors.filter(e => e.type === 'MISSING_REQUIRED_FIELD')
+    };
+    
+    let html = `
+        <hr class="my-3">
+        <div class="text-danger text-center mb-3">
+            <strong><i class="bi bi-x-circle me-1"></i> ${errors.length} error${errors.length !== 1 ? 's' : ''} must be fixed before importing</strong>
+        </div>
+        
+        <!-- Error Summary Pills -->
+        <div class="d-flex flex-wrap justify-content-center gap-2 mb-3">
+            ${errorsByType.duplicateIds.length > 0 ? `
+                <span class="badge bg-danger">
+                    <i class="bi bi-exclamation-circle me-1"></i>${errorsByType.duplicateIds.length} Duplicate Concept ID${errorsByType.duplicateIds.length !== 1 ? 's' : ''}
+                </span>
+            ` : ''}
+            ${errorsByType.duplicateKeys.length > 0 ? `
+                <span class="badge bg-danger">
+                    <i class="bi bi-exclamation-circle me-1"></i>${errorsByType.duplicateKeys.length} Duplicate Key${errorsByType.duplicateKeys.length !== 1 ? 's' : ''}
+                </span>
+            ` : ''}
+            ${errorsByType.missingFields.length > 0 ? `
+                <span class="badge bg-danger">
+                    <i class="bi bi-exclamation-circle me-1"></i>${errorsByType.missingFields.length} Missing Required Field${errorsByType.missingFields.length !== 1 ? 's' : ''}
+                </span>
+            ` : ''}
+        </div>
+        
+        <!-- Detailed Error List (collapsible) -->
+        <div class="accordion" id="validationErrorsAccordion">
+    `;
+    
+    // Duplicate Concept IDs section
+    if (errorsByType.duplicateIds.length > 0) {
+        html += buildErrorSection('duplicateIds', 'Duplicate Concept IDs', errorsByType.duplicateIds, 
+            'These Concept IDs are already being used in the repository or appear multiple times in your file.');
+    }
+    
+    // Duplicate Keys section
+    if (errorsByType.duplicateKeys.length > 0) {
+        html += buildErrorSection('duplicateKeys', 'Duplicate Keys', errorsByType.duplicateKeys,
+            'These Keys are already being used by other concepts in the repository or your file.');
+    }
+    
+    // Missing Required Fields section
+    if (errorsByType.missingFields.length > 0) {
+        html += buildErrorSection('missingFields', 'Missing Required Fields', errorsByType.missingFields,
+            'These concepts are missing values in required columns.');
+    }
+    
+    html += `</div>`;
+    
+    return html;
+}
+
+/**
+ * Builds a collapsible section for a group of errors
+ * @param {string} id - Section ID
+ * @param {string} title - Section title
+ * @param {Array} errors - Array of error objects
+ * @param {string} description - Description of this error type
+ * @returns {string} HTML for the accordion section
+ */
+const buildErrorSection = (id, title, errors, description) => {
+    return `
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-${id}">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                        data-bs-target="#collapse-${id}" aria-expanded="false" aria-controls="collapse-${id}">
+                    <span class="badge bg-danger me-2">${errors.length}</span> ${title}
+                </button>
+            </h2>
+            <div id="collapse-${id}" class="accordion-collapse collapse" aria-labelledby="heading-${id}" 
+                 data-bs-parent="#validationErrorsAccordion">
+                <div class="accordion-body">
+                    <p class="text-muted small mb-2">${description}</p>
+                    <div class="validation-error-list" style="max-height: 200px; overflow-y: auto;">
+                        ${errors.map(err => `
+                            <div class="validation-error-item border-start border-danger border-3 ps-2 mb-2">
+                                <div class="fw-bold small">
+                                    <span class="text-muted">Row ${err.row}:</span> ${err.key}
+                                    ${err.conceptId ? `<span class="text-muted">(ID: ${err.conceptId})</span>` : ''}
+                                </div>
+                                <div class="small text-danger">${err.message}</div>
+                                ${err.suggestion ? `<div class="small text-muted fst-italic"><i class="bi bi-lightbulb me-1"></i>${err.suggestion}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 /**
@@ -359,11 +524,15 @@ const importConceptsToRepository = async (conceptObjects) => {
     showAnimation();
     
     try {
-        // Prepare files for upload
-        const files = conceptObjects.map(concept => ({
-            name: `${concept.conceptID}.json`,
-            content: JSON.stringify(concept, null, 2)
-        }));
+        // Prepare files for upload, stripping internal tracking fields
+        const files = conceptObjects.map(concept => {
+            // Create a clean copy without internal fields
+            const { _sourceRow, ...cleanConcept } = concept;
+            return {
+                name: `${cleanConcept.conceptID}.json`,
+                content: JSON.stringify(cleanConcept, null, 2)
+            };
+        });
         
         // Close import modal and show upload progress modal
         if (importModal) importModal.hide();

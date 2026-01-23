@@ -194,3 +194,34 @@ button:disabled.text-muted {
     text-transform: uppercase;
     opacity: 0.9;
 }
+
+/* Import validation error styles */
+.validation-error-list {
+    font-size: 0.875rem;
+}
+
+.validation-error-item {
+    background-color: rgba(220, 53, 69, 0.05);
+    padding: 0.5rem;
+    border-radius: 0 0.25rem 0.25rem 0;
+}
+
+.validation-error-item:hover {
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+/* Smaller accordion styling for validation errors */
+#validationErrorsAccordion .accordion-button {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+#validationErrorsAccordion .accordion-body {
+    padding: 0.75rem;
+    background-color: #f8f9fa;
+}
+
+#validationErrorsAccordion .accordion-button:not(.collapsed) {
+    background-color: #f8d7da;
+    color: #842029;
+}
