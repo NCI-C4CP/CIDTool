@@ -506,7 +506,7 @@ const updateResponseSelection = (fieldId) => {
     const selectedValues = Array.from(checkboxes).map(cb => cb.value);
     
     // Update pills display with RESPONSE color
-    const responseColor = CONCEPT_TYPE_COLORS.RESPONSE?.hex || '#7030A0';
+    const responseColor = CONCEPT_TYPE_COLORS.RESPONSE.hex;
     pillsContainer.innerHTML = selectedValues.map(value => `
         <span class="badge response-pill" style="background-color: ${responseColor}; color: white;">
             ${value}

@@ -82,7 +82,7 @@ button:disabled.text-muted {
 /* PRIMARY - Blue */
 .concept-type-primary,
 .badge-primary-concept {
-    background-color: #4472C4 !important;
+    background-color: #365FA0 !important;
     color: white !important;
 }
 .concept-type-primary-light,
@@ -90,16 +90,16 @@ button:disabled.text-muted {
     background-color: #D6E2F7 !important;
 }
 .border-primary-concept {
-    border-color: #4472C4 !important;
+    border-color: #365FA0 !important;
 }
 .text-primary-concept {
-    color: #4472C4 !important;
+    color: #365FA0 !important;
 }
 
 /* SECONDARY - Green */
 .concept-type-secondary,
 .badge-secondary-concept {
-    background-color: #70AD47 !important;
+    background-color: #3A7D1C !important;
     color: white !important;
 }
 .concept-type-secondary-light,
@@ -107,16 +107,16 @@ button:disabled.text-muted {
     background-color: #E2F0D9 !important;
 }
 .border-secondary-concept {
-    border-color: #70AD47 !important;
+    border-color: #3A7D1C !important;
 }
 .text-secondary-concept {
-    color: #70AD47 !important;
+    color: #3A7D1C !important;
 }
 
 /* SOURCE - Gold */
 .concept-type-source,
 .badge-source-concept {
-    background-color: #FFC000 !important;
+    background-color: #B58600 !important;
     color: white !important;
 }
 .concept-type-source-light,
@@ -124,16 +124,16 @@ button:disabled.text-muted {
     background-color: #FFF2CC !important;
 }
 .border-source-concept {
-    border-color: #FFC000 !important;
+    border-color: #B58600 !important;
 }
 .text-source-concept {
-    color: #FFC000 !important;
+    color: #B58600 !important;
 }
 
 /* QUESTION - Orange */
 .concept-type-question,
 .badge-question-concept {
-    background-color: #ED7D31 !important;
+    background-color: #C45A12 !important;
     color: white !important;
 }
 .concept-type-question-light,
@@ -141,10 +141,10 @@ button:disabled.text-muted {
     background-color: #FCE4D6 !important;
 }
 .border-question-concept {
-    border-color: #ED7D31 !important;
+    border-color: #C45A12 !important;
 }
 .text-question-concept {
-    color: #ED7D31 !important;
+    color: #C45A12 !important;
 }
 
 /* RESPONSE - Purple */

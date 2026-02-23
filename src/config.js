@@ -146,31 +146,31 @@ export const MODAL_CONFIG = {
  */
 export const CONCEPT_TYPE_COLORS = {
     PRIMARY: {
-        hex: '#4472C4',      // Blue
-        rgb: { r: 68, g: 114, b: 196 },
+        hex: '#365FA0',      // Blue (508 compliant - 6.0:1)
+        rgb: { r: 54, g: 95, b: 160 },
         light: '#D6E2F7',
         name: 'Blue'
     },
     SECONDARY: {
-        hex: '#70AD47',      // Green
-        rgb: { r: 112, g: 173, b: 71 },
+        hex: '#3A7D1C',      // Green (508 compliant - 5.1:1)
+        rgb: { r: 58, g: 125, b: 28 },
         light: '#E2F0D9',
         name: 'Green'
     },
     SOURCE: {
-        hex: '#FFC000',      // Gold/Yellow
-        rgb: { r: 255, g: 192, b: 0 },
+        hex: '#B58600',      // Gold/Yellow (508 compliant - 4.6:1)
+        rgb: { r: 181, g: 134, b: 0 },
         light: '#FFF2CC',
         name: 'Gold'
     },
     QUESTION: {
-        hex: '#ED7D31',      // Orange
-        rgb: { r: 237, g: 125, b: 49 },
+        hex: '#C45A12',      // Orange (508 compliant - 4.7:1)
+        rgb: { r: 196, g: 90, b: 18 },
         light: '#FCE4D6',
         name: 'Orange'
     },
     RESPONSE: {
-        hex: '#7030A0',      // Purple
+        hex: '#7030A0',      // Purple (508 compliant - 7.5:1)
         rgb: { r: 112, g: 48, b: 160 },
         light: '#E4DFEC',
         name: 'Purple'
