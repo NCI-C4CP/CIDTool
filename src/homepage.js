@@ -115,8 +115,11 @@ const renderRepoContent = async (repo, directory) => {
             indexContent = JSON.parse(indexContentString);
         }
 
-        // Exclude files using configuration constants
-        let filesWithoutIndex = files.filter(file => !FILE_FILTERS.EXCLUDED_FILES.includes(file.name));
+        // Exclude non-concept files: filter out excluded files and non-JSON files (e.g., README.md)
+        let filesWithoutIndex = files.filter(file =>
+            !FILE_FILTERS.EXCLUDED_FILES.includes(file.name) &&
+            (file.type === 'dir' || file.name.endsWith('.json'))
+        );
 
         // If 'index.json' does NOT exist, display only directories
         if (!indexFile) {

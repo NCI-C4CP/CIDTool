@@ -532,7 +532,7 @@ const setupResponseMultiSelect = (fieldId = 'responses') => {
  */
 export const renderDeleteModal = async (event) => {
     try {
-        const button = event.target;
+        const button = event.target.closest('button');
         const file = button.getAttribute('data-bs-file');
 
         const { modal, body, footer } = ModalUtils.setupModal('Delete File');
@@ -621,7 +621,7 @@ export const renderViewModal = async (event) => {
     let file = null;
     
     try {
-        const button = event.target;
+        const button = event.target.closest('button');
         file = button.getAttribute('data-bs-file');
         
         // Validate file parameter early
