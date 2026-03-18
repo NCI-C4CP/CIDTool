@@ -7,6 +7,19 @@ import { addFile } from "./api.js";
 import { refreshHomePage } from "./homepage.js";
 
 /**
+ * Extracts the concept type from a header string (e.g., "PRIMARY_KEY" → "PRIMARY")
+ * @param {string} header - Column header string
+ * @returns {string|null} Concept type or null if not recognized
+ */
+const getConceptTypeFromHeader = (header) => {
+    if (!header || typeof header !== 'string') return null;
+    for (const type of MODAL_CONFIG.CONCEPT_TYPES) {
+        if (header.startsWith(`${type}_`)) return type;
+    }
+    return null;
+};
+
+/**
  * Reads an Excel file and returns the data as a 2D array
  * Looks for a "Dictionary" sheet first, falls back to first sheet
  * Filters out completely empty rows (rows where all cells are empty strings)
@@ -78,21 +91,90 @@ const readFiles = async (files) => {
 }
 
 /**
- * Generates and downloads an Excel spreadsheet from data
- * @param {Array} data - 2D array of data to export
+ * Generates and downloads a styled Excel spreadsheet from data
+ * Applies color-coded headers and light backgrounds matching concept types
+ * @param {Array} data - 2D array of data to export (first row = headers)
+ * @param {Array<string>} columnTypes - Concept type for each column (for styling)
  */
-export const generateSpreadsheet = (data) => {
+export const generateSpreadsheet = (data, columnTypes) => {
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.aoa_to_sheet(data);
+    const headers = data[0] || [];
+    const dataRowCount = data.length - 1;
+
+    // Fall back to parsing headers if columnTypes not provided
+    if (!columnTypes) {
+        columnTypes = headers.map(h => getConceptTypeFromHeader(h));
+    }
+
+    // Style header row: bold white text on colored background
+    headers.forEach((header, colIndex) => {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIndex });
+        const type = columnTypes[colIndex];
+        const color = type ? CONCEPT_TYPE_COLORS[type] : null;
+
+        if (worksheet[cellRef]) {
+            worksheet[cellRef].s = {
+                fill: color ? { fgColor: { rgb: color.hex.replace('#', '') } } : { fgColor: { rgb: '4472C4' } },
+                font: { color: { rgb: 'FFFFFF' }, bold: true, sz: 11 },
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                border: {
+                    top: { style: 'thin', color: { rgb: '000000' } },
+                    bottom: { style: 'thin', color: { rgb: '000000' } },
+                    left: { style: 'thin', color: { rgb: '000000' } },
+                    right: { style: 'thin', color: { rgb: '000000' } }
+                }
+            };
+        }
+    });
+
+    // Style data rows: light tinted backgrounds with subtle borders
+    for (let rowIndex = 1; rowIndex <= dataRowCount; rowIndex++) {
+        headers.forEach((header, colIndex) => {
+            const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+            const type = columnTypes[colIndex];
+            const color = type ? CONCEPT_TYPE_COLORS[type] : null;
+
+            if (!worksheet[cellRef]) {
+                worksheet[cellRef] = { v: '', t: 's' };
+            }
+
+            worksheet[cellRef].s = {
+                fill: color ? { fgColor: { rgb: color.light.replace('#', '') } } : {},
+                font: { sz: 11 },
+                alignment: { vertical: 'center' },
+                border: {
+                    top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+                }
+            };
+        });
+    }
+
+    // Set column widths: fit header text with a comfortable minimum
+    worksheet['!cols'] = headers.map((h) => ({
+        width: Math.max(String(h).length + 4, 18)
+    }));
+
+    // Freeze the header row so it stays visible while scrolling
+    worksheet['!freeze'] = { xSplit: 0, ySplit: 1 };
 
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Dictionary');
 
     const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
+    // Build a descriptive filename with the repo name
+    const { repo } = appState.getState();
+    const repoName = repo?.name || 'Dictionary';
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const fileName = `${repoName}_Dictionary_${timestamp}.xlsx`;
+
     const downloadLink = document.createElement('a');
     downloadLink.href = URL.createObjectURL(blob);
-    downloadLink.download = 'data.xlsx';
+    downloadLink.download = fileName;
     downloadLink.click();
 
     URL.revokeObjectURL(downloadLink.href);

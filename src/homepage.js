@@ -332,8 +332,8 @@ const handleDownloadRepo = async () => {
         }
     }
 
-    let structuredData = structureFiles(jsonDataArray);
-    generateSpreadsheet(structuredData);
+    const { data: structuredData, columnTypes } = structureFiles(jsonDataArray);
+    generateSpreadsheet(structuredData, columnTypes);
 };
 
 /**

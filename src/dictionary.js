@@ -358,76 +358,182 @@ const collectResponses = (mapping, columns, data, questionRow, conceptObjects) =
  * Converts an array of JSON concept files back into spreadsheet format
  * Used when exporting concepts from the repository to a spreadsheet
  * 
+ * Produces a denormalized layout where each QUESTION row includes its
+ * parent PRIMARY, SECONDARY, and SOURCE info on the same row.
+ * RESPONSEs appear as separate rows below their parent QUESTION.
+ * 
  * @param {Array<Object>} data - Array of concept objects from JSON files
  * @returns {Array<Array>} 2D array suitable for spreadsheet export
  */
 export const structureFiles = (data) => {
-    // Group concepts by type
+    const { config } = appState.getState();
+
+    // Group concepts by type and build CID → concept lookup
     const conceptsByType = {};
     MODAL_CONFIG.CONCEPT_TYPES.forEach(type => {
         conceptsByType[type] = data.filter(x => x.object_type === type);
     });
 
-    // Build header row dynamically based on config
-    const { config } = appState.getState();
+    const conceptByCID = {};
+    data.forEach(c => { if (c.conceptID) conceptByCID[c.conceptID] = c; });
+
+    // Build header row dynamically using labels from config
     const headers = [];
+    const columnTypes = [];  // Tracks concept type per column (for styling)
     const columnMapping = {}; // Maps type_field to column index
 
     MODAL_CONFIG.CONCEPT_TYPES.forEach(type => {
         const typeConfig = config?.[type] || [];
+
+        // Find labels for KEY and CID from config, fall back to defaults
+        const keyField = typeConfig.find(f => f.id === 'key');
+        const cidField = typeConfig.find(f => f.id === 'conceptID' || f.id === 'conceptId');
         
-        // Always add KEY and CID columns
         columnMapping[`${type}_KEY`] = headers.length;
-        headers.push(`${type}_KEY`);
+        headers.push(keyField?.label || `${type} Key`);
+        columnTypes.push(type);
         
         columnMapping[`${type}_CID`] = headers.length;
-        headers.push(`${type}_CID`);
+        headers.push(cidField?.label || `${type} CID`);
+        columnTypes.push(type);
 
         // Add extra fields from config (excluding references which are positional)
         typeConfig.forEach(field => {
-            if (field.type !== 'reference' && field.id !== 'key' && field.id !== 'conceptID') {
+            if (field.type !== 'reference' && field.id !== 'key' && field.id !== 'conceptID' && field.id !== 'conceptId') {
                 columnMapping[`${type}_${field.id.toUpperCase()}`] = headers.length;
-                headers.push(`${type}_${field.id.toUpperCase()}`);
+                headers.push(field.label || `${type} ${field.id}`);
+                columnTypes.push(type);
             }
         });
     });
 
-    // Build data rows
-    // Note: This is a simplified implementation - full reconstruction of 
-    // hierarchical structure from parent references would be more complex
+    // Helper: fill a row with a concept's non-reference fields
+    const fillConcept = (row, concept, type) => {
+        if (!concept) return;
+
+        const keyCol = columnMapping[`${type}_KEY`];
+        if (keyCol !== undefined) row[keyCol] = concept.key || '';
+
+        const cidCol = columnMapping[`${type}_CID`];
+        if (cidCol !== undefined) row[cidCol] = concept.conceptID || '';
+
+        const typeConfig = config?.[type] || [];
+        Object.keys(concept).forEach(field => {
+            if (['key', 'conceptID', 'object_type', '_sourceRow'].includes(field)) return;
+            const fieldConfig = typeConfig.find(f => f.id === field);
+            if (fieldConfig?.type === 'reference') return;
+
+            const colKey = `${type}_${field.toUpperCase()}`;
+            const colIndex = columnMapping[colKey];
+            if (colIndex !== undefined) {
+                row[colIndex] = concept[field];
+            }
+        });
+    };
+
+    // Helper: find the config field id that references a target type
+    const getRefFieldId = (srcType, tgtType) => {
+        const tc = config?.[srcType] || [];
+        return tc.find(f => f.type === 'reference' && f.referencesType === tgtType)?.id || null;
+    };
+
+    // Resolve reference field names from config
+    const secToParent = getRefFieldId('SECONDARY', 'PRIMARY');
+    const qToSecondary = getRefFieldId('QUESTION', 'SECONDARY');
+    const qToSource = getRefFieldId('QUESTION', 'SOURCE');
+    const qToResponses = getRefFieldId('QUESTION', 'RESPONSE');
+
     const rows = [headers];
-    
-    // For now, just output concepts in type order
-    // A full implementation would reconstruct the positional hierarchy
-    MODAL_CONFIG.CONCEPT_TYPES.forEach(type => {
-        conceptsByType[type].forEach(concept => {
+    const placed = new Set(); // Track placed concept CIDs
+
+    // Walk the hierarchy: PRIMARY → SECONDARY → QUESTION → RESPONSE
+    const primaries = conceptsByType['PRIMARY'] || [];
+    const secondaries = conceptsByType['SECONDARY'] || [];
+    const questions = conceptsByType['QUESTION'] || [];
+
+    primaries.forEach(primary => {
+        placed.add(primary.conceptID);
+
+        // Find secondaries that reference this primary
+        const childSecs = secToParent
+            ? secondaries.filter(s => s[secToParent] === primary.conceptID)
+            : [];
+
+        if (childSecs.length === 0) {
+            // Standalone primary with no children
             const row = new Array(headers.length).fill('');
-            
-            // Set KEY
-            const keyCol = columnMapping[`${type}_KEY`];
-            if (keyCol !== undefined) row[keyCol] = concept.key || '';
-            
-            // Set CID
-            const cidCol = columnMapping[`${type}_CID`];
-            if (cidCol !== undefined) row[cidCol] = concept.conceptID || '';
-            
-            // Set other fields
-            Object.keys(concept).forEach(field => {
-                if (field === 'key' || field === 'conceptID' || field === 'object_type') return;
-                if (field === 'parent' || field === 'source' || field === 'responses') return;
-                
-                const colKey = `${type}_${field.toUpperCase()}`;
-                const colIndex = columnMapping[colKey];
-                if (colIndex !== undefined) {
-                    row[colIndex] = concept[field];
+            fillConcept(row, primary, 'PRIMARY');
+            rows.push(row);
+            return;
+        }
+
+        childSecs.forEach(secondary => {
+            placed.add(secondary.conceptID);
+
+            // Find questions that reference this secondary
+            const childQs = qToSecondary
+                ? questions.filter(q => q[qToSecondary] === secondary.conceptID)
+                : [];
+
+            if (childQs.length === 0) {
+                // Secondary with no questions
+                const row = new Array(headers.length).fill('');
+                fillConcept(row, primary, 'PRIMARY');
+                fillConcept(row, secondary, 'SECONDARY');
+                rows.push(row);
+                return;
+            }
+
+            childQs.forEach(question => {
+                placed.add(question.conceptID);
+
+                // Resolve source for this question
+                let source = null;
+                if (qToSource && question[qToSource]) {
+                    source = conceptByCID[question[qToSource]];
+                    if (source) placed.add(source.conceptID);
+                }
+
+                // Resolve responses for this question
+                let resps = [];
+                if (qToResponses && question[qToResponses] && Array.isArray(question[qToResponses])) {
+                    resps = question[qToResponses]
+                        .map(id => conceptByCID[id])
+                        .filter(Boolean);
+                    resps.forEach(r => placed.add(r.conceptID));
+                }
+
+                // Question row: denormalized with PRIMARY + SECONDARY + SOURCE + QUESTION
+                // First response goes on the same row as the question
+                const qRow = new Array(headers.length).fill('');
+                fillConcept(qRow, primary, 'PRIMARY');
+                fillConcept(qRow, secondary, 'SECONDARY');
+                fillConcept(qRow, source, 'SOURCE');
+                fillConcept(qRow, question, 'QUESTION');
+                if (resps.length > 0) {
+                    fillConcept(qRow, resps[0], 'RESPONSE');
+                }
+                rows.push(qRow);
+
+                // Additional responses on their own rows below
+                for (let i = 1; i < resps.length; i++) {
+                    const rRow = new Array(headers.length).fill('');
+                    fillConcept(rRow, resps[i], 'RESPONSE');
+                    rows.push(rRow);
                 }
             });
-            
-            rows.push(row);
         });
     });
 
-    return rows;
+    // Append any orphan concepts not placed via the hierarchy walk
+    data.forEach(concept => {
+        if (placed.has(concept.conceptID)) return;
+        const row = new Array(headers.length).fill('');
+        fillConcept(row, concept, concept.object_type);
+        rows.push(row);
+    });
+
+    return { data: rows, columnTypes };
 };
 
 // ============================================================================
