@@ -235,7 +235,17 @@ const addHierarchicalReferences = (concept, mapping, columns, data, rowIndex, ob
             return;
         }
 
-        // For PRIMARY and SECONDARY references, look backwards for nearest match
+        // Handle allowMultiple reference fields — collect all unique parent IDs
+        // across all rows where this concept's key appears
+        if (field.allowMultiple) {
+            const allParentIds = collectAllParentIds(concept.key, mapping, columns, data, objectType, referencesType);
+            if (allParentIds.length > 0) {
+                concept[fieldId] = allParentIds;
+            }
+            return;
+        }
+
+        // For PRIMARY and SECONDARY references (single), look backwards for nearest match
         if (referencesType === 'PRIMARY' || referencesType === 'SECONDARY') {
             const parentId = findParentConceptId(mapping, columns, data, rowIndex, referencesType);
             if (parentId) {
@@ -297,6 +307,45 @@ const findParentConceptId = (mapping, columns, data, currentRow, parentType) => 
     }
 
     return null;
+};
+
+/**
+ * Collects all unique parent concept IDs for a given concept key across all rows
+ * Used for allowMultiple reference fields where the same concept appears on multiple rows
+ * with different parents (e.g., a Question under multiple Secondaries)
+ * 
+ * @param {string} conceptKey - The key of the concept to find parents for
+ * @param {Array<Object>} mapping - Key-to-ID mapping
+ * @param {Array<Object>} columns - Column mappings
+ * @param {Array<Array>} data - Spreadsheet data
+ * @param {string} conceptType - The type of the concept (e.g., 'QUESTION')
+ * @param {string} parentType - The type of parent to find (e.g., 'SECONDARY')
+ * @returns {Array} Array of unique parent concept IDs
+ */
+const collectAllParentIds = (conceptKey, mapping, columns, data, conceptType, parentType) => {
+    const conceptColumns = columns.find(c => c.object_type === conceptType);
+    const conceptKeyColumn = conceptColumns?.KEY;
+    const parentColumns = columns.find(c => c.object_type === parentType);
+    const parentKeyColumn = parentColumns?.KEY;
+
+    if (conceptKeyColumn === undefined || parentKeyColumn === undefined) {
+        return [];
+    }
+
+    const parentIds = new Set();
+
+    for (let i = 0; i < data.length; i++) {
+        const rowKey = getCellValue(data[i], conceptKeyColumn);
+        if (rowKey !== conceptKey) continue;
+
+        // For this row, find the nearest parent by looking backwards
+        const parentId = findParentConceptId(mapping, columns, data, i, parentType);
+        if (parentId) {
+            parentIds.add(parentId);
+        }
+    }
+
+    return Array.from(parentIds);
 };
 
 /**
@@ -437,11 +486,19 @@ export const structureFiles = (data) => {
         return tc.find(f => f.type === 'reference' && f.referencesType === tgtType)?.id || null;
     };
 
+    // Helper: check if a reference field allows multiple values
+    const isRefAllowMultiple = (srcType, tgtType) => {
+        const tc = config?.[srcType] || [];
+        const field = tc.find(f => f.type === 'reference' && f.referencesType === tgtType);
+        return field?.allowMultiple === true;
+    };
+
     // Resolve reference field names from config
     const secToParent = getRefFieldId('SECONDARY', 'PRIMARY');
     const qToSecondary = getRefFieldId('QUESTION', 'SECONDARY');
     const qToSource = getRefFieldId('QUESTION', 'SOURCE');
     const qToResponses = getRefFieldId('QUESTION', 'RESPONSE');
+    const qToSecondaryIsMultiple = isRefAllowMultiple('QUESTION', 'SECONDARY');
 
     const rows = [headers];
     const placed = new Set(); // Track placed concept CIDs
@@ -471,8 +528,15 @@ export const structureFiles = (data) => {
             placed.add(secondary.conceptID);
 
             // Find questions that reference this secondary
+            // Handle both scalar and array (allowMultiple) references
             const childQs = qToSecondary
-                ? questions.filter(q => q[qToSecondary] === secondary.conceptID)
+                ? questions.filter(q => {
+                    const ref = q[qToSecondary];
+                    if (Array.isArray(ref)) {
+                        return ref.includes(secondary.conceptID);
+                    }
+                    return ref === secondary.conceptID;
+                })
                 : [];
 
             if (childQs.length === 0) {

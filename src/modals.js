@@ -281,12 +281,12 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
         const initialType = importData?.object_type || 'PRIMARY';
         renderTemplateFields(initialType);
         
-        // Set up multi-select for any RESPONSE reference fields in initial render
+        // Set up multi-select for any allowMultiple or RESPONSE reference fields in initial render
         setTimeout(() => {
             const conceptTemplates = appState.getState().config;
             if (conceptTemplates[initialType]) {
                 conceptTemplates[initialType].forEach(field => {
-                    if (field.type === 'reference' && field.referencesType === 'RESPONSE') {
+                    if (field.type === 'reference' && (field.allowMultiple || field.referencesType === 'RESPONSE')) {
                         setupResponseMultiSelect(field.id);
                     }
                 });
@@ -302,12 +302,12 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
         document.getElementById('conceptType').addEventListener('change', (e) => {
             renderTemplateFields(e.target.value);
 
-            // Set up multi-select for any RESPONSE reference fields
+            // Set up multi-select for any allowMultiple or RESPONSE reference fields
             setTimeout(() => {
                 const conceptTemplates = appState.getState().config;
                 if (conceptTemplates[e.target.value]) {
                     conceptTemplates[e.target.value].forEach(field => {
-                        if (field.type === 'reference' && field.referencesType === 'RESPONSE') {
+                        if (field.type === 'reference' && (field.allowMultiple || field.referencesType === 'RESPONSE')) {
                             setupResponseMultiSelect(field.id);
                         }
                     });
@@ -1241,6 +1241,11 @@ export const renderConfigModal = async () => {
                     </select>
                 </td>
                 <td>
+                    <div class="form-check">
+                        <input class="form-check-input field-allow-multiple" type="checkbox" disabled>
+                    </div>
+                </td>
+                <td>
                     <button class="btn btn-sm btn-outline-danger delete-field-btn">
                         <i class="bi bi-trash"></i>
                     </button>
@@ -1249,12 +1254,18 @@ export const renderConfigModal = async () => {
             
             tableBody.appendChild(newRow);
             
-            // Enable/disable reference type selector based on field type
+            // Enable/disable reference type selector and allow multiple checkbox based on field type
             const typeSelect = newRow.querySelector('.field-type');
             const refTypeSelect = newRow.querySelector('.field-reference-type');
+            const allowMultipleCheckbox = newRow.querySelector('.field-allow-multiple');
             
             typeSelect.addEventListener('change', () => {
-                refTypeSelect.disabled = typeSelect.value !== 'reference';
+                const isReference = typeSelect.value === 'reference';
+                refTypeSelect.disabled = !isReference;
+                allowMultipleCheckbox.disabled = !isReference;
+                if (!isReference) {
+                    allowMultipleCheckbox.checked = false;
+                }
             });
             
             // Add delete event listener
@@ -1269,7 +1280,13 @@ export const renderConfigModal = async () => {
         select.addEventListener('change', (e) => {
             const row = e.target.closest('tr');
             const refTypeSelect = row.querySelector('.field-reference-type');
-            refTypeSelect.disabled = select.value !== 'reference';
+            const allowMultipleCheckbox = row.querySelector('.field-allow-multiple');
+            const isReference = select.value === 'reference';
+            refTypeSelect.disabled = !isReference;
+            allowMultipleCheckbox.disabled = !isReference;
+            if (!isReference) {
+                allowMultipleCheckbox.checked = false;
+            }
         });
     });
     
@@ -1299,6 +1316,7 @@ export const renderConfigModal = async () => {
                     const fieldType = row.querySelector('.field-type').value;
                     const required = row.querySelector('.field-required').checked;
                     const referenceType = row.querySelector('.field-reference-type').value;
+                    const allowMultiple = row.querySelector('.field-allow-multiple').checked;
                     
                     // Skip empty rows
                     if (!id || !label) return;
@@ -1313,6 +1331,11 @@ export const renderConfigModal = async () => {
                     // Add reference type if applicable
                     if (fieldType === 'reference' && referenceType) {
                         fieldConfig.referencesType = referenceType;
+                    }
+
+                    // Add allowMultiple if applicable
+                    if (fieldType === 'reference' && allowMultiple) {
+                        fieldConfig.allowMultiple = true;
                     }
                     
                     newConfig[type].push(fieldConfig);
@@ -1387,7 +1410,7 @@ async function saveEditedConcept(originalContent, typeConfig, file) {
             
             // Handle reference types
             if (field.type === 'reference') {
-                if (field.referencesType === 'RESPONSE') {
+                if (field.allowMultiple || field.referencesType === 'RESPONSE') {
                     // Multi-select reference - parse JSON array and extract concept IDs
                     try {
                         const selectedItems = JSON.parse(value);
@@ -1404,7 +1427,7 @@ async function saveEditedConcept(originalContent, typeConfig, file) {
             
             // Check if the field should be removed or updated
             const isEmpty = field.type === 'reference' 
-                ? (field.referencesType === 'RESPONSE' 
+                ? ((field.allowMultiple || field.referencesType === 'RESPONSE')
                     ? (Array.isArray(value) && value.length === 0)  // Multi-select reference
                     : (!value || value.trim() === ''))              // Single-select reference
                 : (!value || value.trim() === '');                 // Other field types (text, concept)

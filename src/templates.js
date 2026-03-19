@@ -388,6 +388,11 @@ export const FORM_UTILS = {
                 </select>
             </td>
             <td>
+                <div class="form-check">
+                    <input class="form-check-input field-allow-multiple" type="checkbox" ${field.allowMultiple ? 'checked' : ''} ${field.type !== 'reference' ? 'disabled' : ''}>
+                </div>
+            </td>
+            <td>
                 <button class="btn btn-sm btn-outline-danger delete-field-btn">
                     <i class="bi bi-trash"></i>
                 </button>
@@ -413,6 +418,7 @@ export const FORM_UTILS = {
                         <th>Type</th>
                         <th>Required</th>
                         <th>Reference Type</th>
+                        <th>Allow Multiple</th>
                         <th>Actions</th>
                     </tr>
                 </thead>

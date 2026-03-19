@@ -270,11 +270,12 @@ export const removeEventListeners = (element) => {
 export const createReferenceDropdown = (field, prefix = '') => {
     const targetType = field.referencesType;
     const fieldId = prefix ? `${prefix}${field.id}` : field.id;
+    const allowMultiple = field.allowMultiple ? 'true' : 'false';
     
     // Create loading placeholder - will be populated by initReferenceDropdown
     return `
         <select class="form-select" id="${fieldId}" ${field.required ? 'required' : ''} disabled
-                data-reference-type="${targetType}" data-required="${field.required}">
+                data-reference-type="${targetType}" data-required="${field.required}" data-allow-multiple="${allowMultiple}">
             <option value="">Loading ${targetType} concepts...</option>
         </select>
         <div class="form-text text-info">Fetching available concepts...</div>
@@ -297,8 +298,9 @@ export const initReferenceDropdown = (fieldId, initialValue = null) => {
     
     const targetType = selectElement.dataset.referenceType;
     const isRequired = selectElement.dataset.required === 'true';
+    const allowMultiple = selectElement.dataset.allowMultiple === 'true';
     
-    loadConceptsForDropdown(fieldId, targetType, isRequired, initialValue);
+    loadConceptsForDropdown(fieldId, targetType, isRequired, initialValue, allowMultiple);
 };
 
 /**
@@ -309,7 +311,7 @@ export const initReferenceDropdown = (fieldId, initialValue = null) => {
  * @param {boolean} isRequired - Whether the field is required
  * @param {*} initialValue - Initial value to set after loading
  */
-const loadConceptsForDropdown = (fieldId, targetType, isRequired, initialValue = null) => {
+const loadConceptsForDropdown = (fieldId, targetType, isRequired, initialValue = null, allowMultiple = false) => {
     try {
         const conceptFiles = getConceptsByType(targetType);
         
@@ -341,8 +343,8 @@ const loadConceptsForDropdown = (fieldId, targetType, isRequired, initialValue =
             return;
         }
         
-        // Handle RESPONSE type specially
-        if (targetType === 'RESPONSE') {
+        // Use multi-select widget for allowMultiple fields (including RESPONSE for backward compatibility)
+        if (allowMultiple || targetType === 'RESPONSE') {
             updateResponseDropdown(fieldId, referencedConcepts, initialValue);
         } else {
             updateStandardDropdown(fieldId, referencedConcepts, isRequired, initialValue);
@@ -415,18 +417,23 @@ const updateStandardDropdown = (fieldId, referencedConcepts, isRequired, initial
 };
 
 /**
- * Updates a RESPONSE type dropdown with multi-select functionality
+ * Updates a reference dropdown with multi-select functionality
+ * Used for any allowMultiple reference field (including RESPONSE)
  */
 const updateResponseDropdown = (fieldId, referencedConcepts, initialValue = null) => {
     const selectElement = document.getElementById(fieldId);
     if (!selectElement) return;
+
+    const referenceType = selectElement.dataset.referenceType || 'RESPONSE';
+    const typeLabel = referenceType.charAt(0) + referenceType.slice(1).toLowerCase();
     
     const containerHTML = `
         <div class="dropdown-container">
             <div class="form-control d-flex flex-wrap align-items-center" 
                 id="${fieldId}_container" role="button" data-bs-toggle="dropdown" 
+                data-reference-type="${referenceType}"
                 aria-expanded="false">
-                <span class="dropdown-text">Select Responses</span>
+                <span class="dropdown-text">Select ${typeLabel} Concepts</span>
             </div>
             
             <div class="dropdown-menu p-2 w-100" aria-labelledby="${fieldId}_container">
@@ -443,7 +450,7 @@ const updateResponseDropdown = (fieldId, referencedConcepts, initialValue = null
                 </div>
             </div>
             <div id="${fieldId}_pills" class="selected-pills d-flex flex-wrap mt-2"></div>
-            <input type="hidden" id="${fieldId}" value="[]">
+            <input type="hidden" id="${fieldId}" value="[]" data-reference-type="${referenceType}">
         </div>
     `;
     
@@ -494,7 +501,7 @@ const setupResponseDropdownEvents = (fieldId) => {
 };
 
 /**
- * Updates the response selection display and hidden input
+ * Updates the multi-select selection display and hidden input
  */
 const updateResponseSelection = (fieldId) => {
     const pillsContainer = document.getElementById(`${fieldId}_pills`);
@@ -504,11 +511,17 @@ const updateResponseSelection = (fieldId) => {
     if (!pillsContainer || !hiddenInput) return;
     
     const selectedValues = Array.from(checkboxes).map(cb => cb.value);
+
+    // Determine color from the reference type (fall back to RESPONSE for backward compatibility)
+    const referenceType = hiddenInput.dataset?.referenceType || 
+                          document.getElementById(`${fieldId}_container`)?.dataset?.referenceType || 
+                          'RESPONSE';
+    const pillColor = CONCEPT_TYPE_COLORS[referenceType]?.hex || CONCEPT_TYPE_COLORS.RESPONSE.hex;
+    const typeLabel = referenceType.charAt(0) + referenceType.slice(1).toLowerCase();
     
-    // Update pills display with RESPONSE color
-    const responseColor = CONCEPT_TYPE_COLORS.RESPONSE.hex;
+    // Update pills display with concept type color
     pillsContainer.innerHTML = selectedValues.map(value => `
-        <span class="badge response-pill" style="background-color: ${responseColor}; color: white;">
+        <span class="badge response-pill" style="background-color: ${pillColor}; color: white;">
             ${value}
             <button type="button" class="btn-close btn-close-white ms-1" 
                 onclick="removeResponsePill('${fieldId}', '${value}')"></button>
@@ -523,8 +536,8 @@ const updateResponseSelection = (fieldId) => {
     const dropdownText = container?.querySelector('.dropdown-text');
     if (dropdownText) {
         dropdownText.textContent = selectedValues.length > 0 
-            ? `${selectedValues.length} Response${selectedValues.length !== 1 ? 's' : ''} Selected`
-            : 'Select Responses';
+            ? `${selectedValues.length} ${typeLabel}${selectedValues.length !== 1 ? 's' : ''} Selected`
+            : `Select ${typeLabel} Concepts`;
     }
 };
 
@@ -571,8 +584,8 @@ export const validateFormFields = (payload, template) => {
             case 'reference':
                 // Handle both single-select and multi-select reference fields
                 if (fieldElement.value) {
-                    // Check if this is a multi-select field (RESPONSE type with pills)
-                    if (field.referencesType === 'RESPONSE') {
+                    // Check if this is a multi-select field (allowMultiple or RESPONSE type with pills)
+                    if (field.allowMultiple || field.referencesType === 'RESPONSE') {
                         try {
                             // Parse the JSON array of selected items
                             const selectedItems = JSON.parse(fieldElement.value);
