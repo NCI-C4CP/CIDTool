@@ -10,6 +10,7 @@
     "test:verbose": "node --experimental-vm-modules node_modules/jest/bin/jest.js --verbose"
   },
   "overrides": {
+    "picomatch@^2": "2.3.2",
     "picomatch@^4": "4.0.4"
   },
   "devDependencies": {
