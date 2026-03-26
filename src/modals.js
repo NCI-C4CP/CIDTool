@@ -488,10 +488,12 @@ const setupResponseMultiSelect = (fieldId = 'responses') => {
                 // Create a pill for this selection
                 const pill = document.createElement('span');
                 pill.className = 'response-pill';
-                pill.innerHTML = `
-                    ${optionLabel}
-                    <span class="pill-remove" data-id="${optionId}">&times;</span>
-                `;
+                pill.textContent = optionLabel;
+                const removeBtn = document.createElement('span');
+                removeBtn.className = 'pill-remove';
+                removeBtn.dataset.id = optionId;
+                removeBtn.textContent = '\u00D7';
+                pill.appendChild(removeBtn);
                 pillsContainer.appendChild(pill);
             }
         });

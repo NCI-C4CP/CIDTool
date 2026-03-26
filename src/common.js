@@ -522,9 +522,9 @@ const updateResponseSelection = (fieldId) => {
     // Update pills display with concept type color
     pillsContainer.innerHTML = selectedValues.map(value => `
         <span class="badge response-pill" style="background-color: ${pillColor}; color: white;">
-            ${value}
+            ${escapeHtml(value)}
             <button type="button" class="btn-close btn-close-white ms-1" 
-                onclick="removeResponsePill('${fieldId}', '${value}')"></button>
+                onclick="removeResponsePill('${escapeHtml(fieldId)}', '${escapeHtml(value)}')"></button>
         </span>
     `).join('');
     

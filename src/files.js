@@ -1,6 +1,6 @@
 import { parseColumns, structureDictionary, structureFiles } from "./dictionary.js";
 import { assignConcepts, validateImportData } from "./concepts.js";
-import { appState, removeEventListeners, showAnimation, hideAnimation } from "./common.js";
+import { appState, removeEventListeners, showAnimation, hideAnimation, escapeHtml } from "./common.js";
 import { renderUploadModal } from "./modals.js";
 import { MODAL_CONFIG, CONCEPT_TYPE_COLORS } from "./config.js";
 import { addFile } from "./api.js";
@@ -239,7 +239,7 @@ const processDictionaryFile = async (file) => {
     zoneContent.innerHTML = `
         <div class="text-primary">
             <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-            Processing dictionary from <strong>${file.name}</strong>...
+            Processing dictionary from <strong>${escapeHtml(file.name)}</strong>...
         </div>
     `;
     
@@ -318,7 +318,7 @@ const processDictionaryFile = async (file) => {
             zoneContent.innerHTML = `
                 <div class="text-danger">
                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    <strong>${file.name}</strong> has validation errors
+                    <strong>${escapeHtml(file.name)}</strong> has validation errors
                 </div>
             `;
             // Don't enable import button - user needs to fix errors
@@ -329,7 +329,7 @@ const processDictionaryFile = async (file) => {
         zoneContent.innerHTML = `
             <div class="text-success">
                 <i class="bi bi-check-circle-fill me-2"></i>
-                <strong>${file.name}</strong> parsed successfully
+                <strong>${escapeHtml(file.name)}</strong> parsed successfully
             </div>
         `;
         
