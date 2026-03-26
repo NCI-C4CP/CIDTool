@@ -11,7 +11,7 @@ import { displayError } from "./common.js";
 export const assignConcepts = (categories, data, existingRepoIds = new Set()) => {
 
     let concepts = [];
-    const seenConcepts = new Set(); // Track concept keys we've already processed
+    const seenConcepts = new Set(); // Track concept keys we've already processed (lowercase for case-insensitive matching)
 
     for(const category of categories) {
         
@@ -24,8 +24,8 @@ export const assignConcepts = (categories, data, existingRepoIds = new Set()) =>
         for(let i = 0; i < data.length; i++) {
             const conceptKey = data[i][key];
             
-            // Skip empty cells or already-seen concepts
-            if (!conceptKey || seenConcepts.has(conceptKey)) {
+            // Skip empty cells or already-seen concepts (case-insensitive)
+            if (!conceptKey || seenConcepts.has(conceptKey.toLowerCase())) {
                 continue;
             }
             
@@ -40,8 +40,8 @@ export const assignConcepts = (categories, data, existingRepoIds = new Set()) =>
                 }
             }
             
-            // Mark as seen and add to concepts array
-            seenConcepts.add(conceptKey);
+            // Mark as seen (lowercase) and add to concepts array
+            seenConcepts.add(conceptKey.toLowerCase());
             concepts.push({
                 concept: conceptKey,
                 id: conceptId,
@@ -79,14 +79,16 @@ const validateInitialMapping = (objects) => {
 
         if(object.id === undefined || object.id === null) continue;
 
-        if(concepts.has(object.concept)) {
-            if(concepts.get(object.concept) !== object.id) {
+        const keyLower = object.concept.toLowerCase();
+
+        if(concepts.has(keyLower)) {
+            if(concepts.get(keyLower) !== object.id) {
                 displayError("Multiple Concept IDs used for same Key (" + object.concept + ")");
                 return false;
             }
         }
         else {
-            concepts.set(object.concept, object.id);
+            concepts.set(keyLower, object.id);
         }
     }
 
@@ -100,7 +102,7 @@ const filterDuplicateMapping = (objects) => {
 
     let filtered = objects.filter(object => {
         
-        let key = `${object.concept}-${object.id}`;
+        let key = `${object.concept.toLowerCase()}-${object.id}`;
 
         if(temp.has(key)) {
             return false;
@@ -109,7 +111,7 @@ const filterDuplicateMapping = (objects) => {
             temp.add(key);
             // Check for actual ID value (not undefined, null, or empty string)
             if(object.id !== undefined && object.id !== null && object.id !== '') {
-                conceptsWithID.add(object.concept);
+                conceptsWithID.add(object.concept.toLowerCase());
             }
 
             return true;
@@ -119,7 +121,7 @@ const filterDuplicateMapping = (objects) => {
     filtered = filtered.filter(object => {
         // Treat empty strings same as undefined
         const hasNoId = object.id === undefined || object.id === null || object.id === '';
-        if(hasNoId && conceptsWithID.has(object.concept)) return false;
+        if(hasNoId && conceptsWithID.has(object.concept.toLowerCase())) return false;
 
         return true;
     });

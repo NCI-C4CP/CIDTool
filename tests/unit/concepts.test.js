@@ -6,7 +6,7 @@
  * - assignConcepts: Creates concept mappings from spreadsheet data
  */
 
-import { validateImportData } from '../../src/concepts.js';
+import { validateImportData, assignConcepts } from '../../src/concepts.js';
 
 // ============================================================================
 // validateImportData Tests
@@ -272,6 +272,89 @@ describe('validateImportData', () => {
             
             expect(result.valid).toBe(false);
             expect(result.errors[0].type).toBe('DUPLICATE_CONCEPT_ID');
+        });
+    });
+});
+
+// ============================================================================
+// assignConcepts Tests - Case-Insensitive Key Matching
+// ============================================================================
+
+describe('assignConcepts', () => {
+
+    // Helper: build a simple category with KEY and CID column indices
+    const makeCategory = (keyCol, cidCol, type = 'PRIMARY') => ({
+        KEY: keyCol, CID: cidCol, object_type: type
+    });
+
+    describe('Case-Insensitive Key Deduplication', () => {
+
+        test('treats keys with different capitalization as the same concept', () => {
+            const categories = [makeCategory(0, 1)];
+            const data = [
+                ['Apple', 100000001],
+                ['apple', 100000002],
+                ['APPLE', 100000003],
+            ];
+
+            const result = assignConcepts(categories, data);
+
+            expect(result).not.toBe(false);
+            // Only the first occurrence should be kept
+            expect(result).toHaveLength(1);
+            expect(result[0].concept).toBe('Apple');
+            expect(result[0].id).toBe(100000001);
+        });
+
+        test('assigns the same auto-generated ID for case-variant keys', () => {
+            const categories = [makeCategory(0, 1)];
+            const data = [
+                ['Survey', undefined],
+                ['survey', undefined],
+                ['SURVEY', undefined],
+            ];
+
+            const result = assignConcepts(categories, data);
+
+            expect(result).not.toBe(false);
+            expect(result).toHaveLength(1);
+            expect(result[0].concept).toBe('Survey');
+            // Should have an auto-generated 9-digit ID
+            expect(result[0].id).toBeGreaterThanOrEqual(100000000);
+        });
+
+        test('still handles exact duplicates correctly', () => {
+            const categories = [makeCategory(0, 1)];
+            const data = [
+                ['Age', 400000001],
+                ['Age', 400000001],
+            ];
+
+            const result = assignConcepts(categories, data);
+
+            expect(result).not.toBe(false);
+            expect(result).toHaveLength(1);
+            expect(result[0].id).toBe(400000001);
+        });
+    });
+
+    describe('Case-Insensitive Validation', () => {
+
+        test('rejects case-variant keys with different explicit IDs', () => {
+            const categories = [
+                makeCategory(0, 1, 'PRIMARY'),
+                makeCategory(2, 3, 'SECONDARY'),
+            ];
+            const data = [
+                ['Apple', 100000001, 'apple', 200000001],
+            ];
+
+            const result = assignConcepts(categories, data);
+
+            // "apple" should be skipped because "Apple" was already seen (case-insensitive)
+            // so only 1 concept total
+            expect(result).not.toBe(false);
+            expect(result).toHaveLength(1);
         });
     });
 });

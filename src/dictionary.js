@@ -111,19 +111,19 @@ const processConceptType = (mapping, columns, data, objectType, conceptObjects) 
         return conceptObjects;
     }
 
-    // Track processed keys to avoid duplicates
+    // Track processed keys to avoid duplicates (case-insensitive)
     const processedKeys = new Set();
 
     for (let rowIndex = 0; rowIndex < data.length; rowIndex++) {
         const row = data[rowIndex];
         const keyValue = getCellValue(row, keyColumn);
 
-        // Skip if no key value or already processed
-        if (!keyValue || processedKeys.has(keyValue)) {
+        // Skip if no key value or already processed (case-insensitive)
+        if (!keyValue || processedKeys.has(keyValue.toLowerCase())) {
             continue;
         }
 
-        processedKeys.add(keyValue);
+        processedKeys.add(keyValue.toLowerCase());
 
         // Build the concept object
         const concept = buildConceptObject(
@@ -162,7 +162,7 @@ const processConceptType = (mapping, columns, data, objectType, conceptObjects) 
  */
 const buildConceptObject = (mapping, columns, data, rowIndex, keyValue, objectType, typeColumns, typeConfig, conceptObjects) => {
     // Get concept ID from mapping
-    const mappingEntry = mapping.find(m => m.concept === keyValue);
+    const mappingEntry = mapping.find(m => m.concept.toLowerCase() === keyValue.toLowerCase());
     if (!mappingEntry) {
         console.warn(`No mapping found for concept: ${keyValue}`);
         return null;
@@ -260,7 +260,7 @@ const addHierarchicalReferences = (concept, mapping, columns, data, rowIndex, ob
             if (sourceColumns?.KEY !== undefined) {
                 const sourceKey = getCellValue(row, sourceColumns.KEY);
                 if (sourceKey) {
-                    const sourceMapping = mapping.find(m => m.concept === sourceKey);
+                    const sourceMapping = mapping.find(m => m.concept.toLowerCase() === sourceKey.toLowerCase());
                     if (sourceMapping) {
                         concept[fieldId] = sourceMapping.id;
                     }
@@ -299,7 +299,7 @@ const findParentConceptId = (mapping, columns, data, currentRow, parentType) => 
     for (let i = currentRow; i >= 0; i--) {
         const parentKey = getCellValue(data[i], parentKeyColumn);
         if (parentKey) {
-            const parentMapping = mapping.find(m => m.concept === parentKey);
+            const parentMapping = mapping.find(m => m.concept.toLowerCase() === parentKey.toLowerCase());
             if (parentMapping) {
                 return parentMapping.id;
             }
@@ -336,7 +336,7 @@ const collectAllParentIds = (conceptKey, mapping, columns, data, conceptType, pa
 
     for (let i = 0; i < data.length; i++) {
         const rowKey = getCellValue(data[i], conceptKeyColumn);
-        if (rowKey !== conceptKey) continue;
+        if (!rowKey || rowKey.toLowerCase() !== conceptKey.toLowerCase()) continue;
 
         // For this row, find the nearest parent by looking backwards
         const parentId = findParentConceptId(mapping, columns, data, i, parentType);
@@ -388,7 +388,7 @@ const collectResponses = (mapping, columns, data, questionRow, conceptObjects) =
         const responseKey = getCellValue(data[i], responseKeyColumn);
         if (responseKey) {
             // Find the response in mapping (which has all IDs assigned already)
-            const responseMapping = mapping.find(m => m.concept === responseKey);
+            const responseMapping = mapping.find(m => m.concept.toLowerCase() === responseKey.toLowerCase());
 
             if (responseMapping) {
                 responses.push(responseMapping.id);
