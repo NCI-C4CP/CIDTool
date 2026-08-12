@@ -7,7 +7,7 @@
  * @requires common - Utility functions and state management
  */
 
-import { REDIRECT_URI, REDIRECT_URI_LOCAL, API_CONFIG } from './config.js';
+import { REDIRECT_URI, REDIRECT_URI_LOCAL, API_CONFIG, RATE_LIMIT_WARN_THRESHOLD } from './config.js';
 import { toBase64, isLocal, appState, fromBase64, isTokenError, showUserNotification, getErrorMessage } from './common.js';
 
 /**
@@ -51,23 +51,81 @@ const createHeaders = (includeAuth = true) => {
  * @throws {Error} Throws error with user-friendly message for failed requests
  */
 const validateResponse = async (response, operation) => {
-    if (!response.ok) {
-        const error = new Error(`${operation} failed`);
-        error.status = response.status;
-        error.statusText = response.statusText;
-        
-        // Handle token-related errors
-        if (isTokenError(error)) {
-            showUserNotification('error', 'Your session has expired. Please log in again.');
-            // Could trigger logout flow here
-        } else {
-            showUserNotification('error', getErrorMessage(error));
-        }
-        
-        throw error;
+    if (response.ok) return response;
+
+    // Clone so the caller's responseType handling is unaffected if this ever stops throwing
+    const details = await response.clone().json().catch(() => ({}));
+
+    const error = new Error(`${operation} failed`);
+    error.status = response.status;
+    error.statusText = response.statusText;
+    error.retryAfter = details.retryAfter;
+    error.rateLimit = details.rateLimit;
+    error.isRateLimit = response.status === 429;
+
+    if (error.isRateLimit) {
+        showUserNotification('error', getRateLimitMessage(error));
+    } else if (isTokenError(error)) {
+        showUserNotification('error', 'Your session has expired. Please log in again.');
+        // Could trigger logout flow here
+    } else {
+        showUserNotification('error', getErrorMessage(error));
     }
-    
-    return response;
+
+    throw error;
+};
+
+/**
+ * Builds the user-facing message for a GitHub rate limit rejection
+ * @param {Error} error - Error carrying retryAfter/rateLimit details from the backend
+ * @returns {string} Message describing the limit and when it lifts
+ */
+const getRateLimitMessage = (error) => {
+    const resource = error.rateLimit?.resource ? `${error.rateLimit.resource} ` : '';
+    const waitSeconds = error.retryAfter ?? error.rateLimit?.resetIn;
+
+    if (waitSeconds) {
+        return `GitHub ${resource}rate limit reached. Try again in ${formatDuration(waitSeconds)}.`;
+    }
+
+    return `GitHub ${resource}rate limit reached. Please wait before retrying.`;
+};
+
+/**
+ * Formats a duration in seconds as a short human-readable string
+ * @param {number} seconds - Duration in seconds
+ * @returns {string} e.g. '45 seconds' or '12 minutes'
+ */
+const formatDuration = (seconds) => {
+    if (seconds < 60) return `${Math.ceil(seconds)} seconds`;
+    return `${Math.ceil(seconds / 60)} minutes`;
+};
+
+/**
+ * Records rate limit telemetry returned by the backend and warns when the budget runs low
+ * 
+ * @param {Object} payload - Parsed backend response, optionally carrying a rateLimit object
+ * @param {string} operation - Description of the operation, for the console record
+ */
+let lastWarnedReset = null;
+
+const recordRateLimit = (payload, operation) => {
+    const rateLimit = payload?.rateLimit;
+    if (!rateLimit || typeof rateLimit.remaining !== 'number') return;
+
+    appState.setState({ rateLimit });
+
+    const { limit, remaining, used, resource, resetIn, reset } = rateLimit;
+    console.debug('[rate-limit]', { operation, resource, limit, remaining, used, resetIn });
+
+    // Warn at most once per reset window so a long import doesn't spam the user
+    if (limit > 0 && remaining / limit <= RATE_LIMIT_WARN_THRESHOLD && lastWarnedReset !== reset) {
+        lastWarnedReset = reset;
+        showUserNotification(
+            'warning',
+            `GitHub ${resource || 'API'} rate limit is nearly exhausted: ${remaining} of ${limit} remaining. Resets in ${formatDuration(resetIn ?? 0)}.`
+        );
+    }
 };
 
 /**
@@ -84,6 +142,10 @@ const makeApiRequest = async (endpoint, options = {}, operation = 'API request')
         headers: createHeaders(options.includeAuth !== false),
         ...options
     };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+    requestOptions.signal = controller.signal;
     
     try {
         const response = await fetch(url, requestOptions);
@@ -95,33 +157,24 @@ const makeApiRequest = async (endpoint, options = {}, operation = 'API request')
         } else if (options.responseType === 'text') {
             return await response.text();
         } else {
-            return await response.json();
+            const payload = await response.json();
+            recordRateLimit(payload, operation);
+            return payload;
         }
     } catch (error) {
+        if (error.name === 'AbortError') {
+            const timeoutError = new Error(`${operation} timed out`);
+            timeoutError.status = 408;
+            showUserNotification('error', `${operation} timed out. Please try again.`);
+            console.error(`${operation} timed out after ${API_CONFIG.TIMEOUT}ms`);
+            throw timeoutError;
+        }
+
         console.error(`${operation} failed:`, error);
         throw error;
+    } finally {
+        clearTimeout(timeoutId);
     }
-};
-
-/**
- * Builds file path from current state and optional filename
- * @param {string} fileName - Optional filename to append
- * @param {string} suffix - Optional suffix to append (e.g., '.json')
- * @returns {string} Complete file path
- */
-const buildPath = (fileName = '', suffix = '') => {
-    const { directory } = appState.getState();
-    let path = directory ? `${directory}/` : '';
-    
-    if (fileName) {
-        path += fileName;
-    }
-    
-    if (suffix) {
-        path += suffix;
-    }
-    
-    return path;
 };
 
 /**
@@ -207,7 +260,6 @@ export const getRepoContents = async () => {
  */
 export const addFile = async (fileName, content) => {
     const { owner, repoName } = appState.getState();
-    const path = buildPath(fileName);
 
     return await makeApiRequest(
         'addFile',
@@ -216,42 +268,12 @@ export const addFile = async (fileName, content) => {
             body: JSON.stringify({
                 owner,
                 repo: repoName,
-                path,
+                path: fileName,
                 message: API_CONFIG.COMMIT_MESSAGES.ADD_FILE,
                 content: toBase64(content)
             })
         },
         'Add file'
-    );
-};
-
-/**
- * Creates a new folder in the repository by adding a .gitkeep file
- * 
- * @async
- * @function addFolder
- * @param {string} folderName - Name of the folder to create
- * 
- * @returns {Promise<Object>} GitHub API response with .gitkeep file details
- * @throws {Error} Throws error if folder creation fails
- */
-export const addFolder = async (folderName) => {
-    const { owner, repoName } = appState.getState();
-    const path = buildPath(folderName, '/.gitkeep');
-
-    return await makeApiRequest(
-        'addFile',
-        {
-            method: 'POST',
-            body: JSON.stringify({
-                owner,
-                repo: repoName,
-                path,
-                message: API_CONFIG.COMMIT_MESSAGES.ADD_FOLDER,
-                content: toBase64('')
-            })
-        },
-        'Add folder'
     );
 };
 
@@ -273,7 +295,6 @@ export const addFolder = async (folderName) => {
  */
 export const updateFile = async (fileName, content, sha) => {
     const { owner, repoName } = appState.getState();
-    const path = buildPath(fileName);
 
     return await makeApiRequest(
         'updateFile',
@@ -282,7 +303,7 @@ export const updateFile = async (fileName, content, sha) => {
             body: JSON.stringify({
                 owner,
                 repo: repoName,
-                path,
+                path: fileName,
                 sha,
                 message: API_CONFIG.COMMIT_MESSAGES.UPDATE_FILE,
                 content: toBase64(content)
@@ -305,7 +326,6 @@ export const updateFile = async (fileName, content, sha) => {
  */
 export const deleteFile = async (fileName, sha) => {
     const { owner, repoName } = appState.getState();
-    const path = buildPath(fileName);
 
     return await makeApiRequest(
         'deleteFile',
@@ -314,7 +334,7 @@ export const deleteFile = async (fileName, sha) => {
             body: JSON.stringify({
                 owner,
                 repo: repoName,
-                path,
+                path: fileName,
                 sha,
                 message: API_CONFIG.COMMIT_MESSAGES.DELETE_FILE
             })
@@ -324,21 +344,20 @@ export const deleteFile = async (fileName, sha) => {
 };
 
 /**
- * Retrieves files and directories from the repository
+ * Retrieves files from the repository
  * 
  * @async
  * @function getFiles
  * @param {string} [fileName=''] - Optional specific file name to retrieve
  * 
- * @returns {Promise<Object>} GitHub API response with file/directory listing or file content
+ * @returns {Promise<Object>} GitHub API response with file listing or file content
  * @throws {Error} Throws error if file retrieval fails
  */
 export const getFiles = async (fileName = '') => {
     const { owner, repoName } = appState.getState();
-    const path = buildPath(fileName);
     
     return await makeApiRequest(
-        `getFiles&owner=${owner}&repo=${repoName}&path=${path}`,
+        `getFiles&owner=${owner}&repo=${repoName}&path=${fileName}`,
         { method: 'GET' },
         'Get files'
     );
@@ -364,7 +383,7 @@ export const getUserRepositories = async () => {
 };
 
 /**
- * Retrieves concept ID from the index.json file in current directory
+ * Retrieves concept ID from the repository index.json file
  * 
  * @async
  * @function getConcept
@@ -374,10 +393,9 @@ export const getUserRepositories = async () => {
  */
 export const getConcept = async () => {
     const { owner, repoName } = appState.getState();
-    const path = buildPath('', 'index.json');
     
     const data = await makeApiRequest(
-        `getConcept&owner=${owner}&repo=${repoName}&path=${path}`,
+        `getConcept&owner=${owner}&repo=${repoName}&path=index.json`,
         { 
             method: 'GET' 
         },
@@ -399,11 +417,10 @@ export const getConcept = async () => {
  */
 export const getConfigurationSettings = async () => {
     const { owner, repoName } = appState.getState();
-    const path = buildPath('config.json');
     
     try {
         const responseData = await makeApiRequest(
-            `getConfig&owner=${owner}&repo=${repoName}&path=${path}`,
+            `getConfig&owner=${owner}&repo=${repoName}&path=config.json`,
             { 
                 method: 'GET' 
             },
@@ -479,31 +496,6 @@ export const checkReferences = async (conceptId) => {
             method: 'GET' 
         },
         'Check concept references'
-    );
-};
-
-/**
- * Rebuilds the index.json file in the repository
- * 
- * @async
- * @function rebuildIndex
- * 
- * @returns {Promise<Object>} API response confirming index rebuild
- * @throws {Error} Throws error if index rebuild fails
- */
-export const rebuildIndex = async () => {
-    const { owner, repoName } = appState.getState();
-    
-    return await makeApiRequest(
-        'rebuildIndex',
-        {
-            method: 'POST',
-            body: JSON.stringify({
-                owner,
-                repo: repoName
-            })
-        },
-        'Rebuild index'
     );
 };
 

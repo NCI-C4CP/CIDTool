@@ -189,7 +189,7 @@ export const addEventOpenRepoButtons = (repos, renderRepoContent) => {
             // Update repo object with permissions for consistency
             repo.permissions = permissions;
             
-            await executeWithAnimation(renderRepoContent, repo, '');
+            await executeWithAnimation(renderRepoContent, repo);
         });
     });
 };
@@ -197,25 +197,17 @@ export const addEventOpenRepoButtons = (repos, renderRepoContent) => {
 /**
  * Adds event listeners to search bar and control buttons
  * @param {Function} renderFileList - Function to render file list
- * @param {Function} renderAddFolderModal - Function to render add folder modal
  * @param {Function} renderAddModal - Function to render add modal
  * @param {Function} refreshHomePage - Function to refresh homepage
- * @param {Function} directoryBack - Function to navigate back
  * @param {Function} renderConfigModal - Function to render config modal
  * @param {Function} handleDownloadRepo - Function to handle repo download
- * @param {Function} handleRebuildIndex - Function to handle index rebuilding
- * @param {Function} handleResetRepository - Function to handle repository reset (delete all concepts)
  */
 export const addEventSearchBarControls = (
     renderFileList, 
-    renderAddFolderModal, 
     renderAddModal, 
     refreshHomePage, 
-    directoryBack, 
     renderConfigModal, 
-    handleDownloadRepo,
-    handleRebuildIndex,
-    handleResetRepository
+    handleDownloadRepo
 ) => {
     // Search input event listener with debouncing for improved performance
     const searchInput = document.getElementById('searchFiles');
@@ -228,14 +220,6 @@ export const addEventSearchBarControls = (
         searchInput.addEventListener('input', (event) => {
             const searchTerm = event.target.value.toLowerCase();
             debouncedSearch(searchTerm);
-        });
-    }
-
-    // Add folder button
-    const addFolderButton = document.getElementById('addFolder');
-    if (addFolderButton) {
-        addFolderButton.addEventListener('click', () => {
-            renderAddFolderModal();
         });
     }
 
@@ -255,35 +239,11 @@ export const addEventSearchBarControls = (
         });
     }
 
-    // Back button
-    const backButton = document.getElementById('backButton');
-    if (backButton) {
-        backButton.addEventListener('click', async () => {
-            directoryBack();
-        });
-    }
-
     // Config button
     const configButton = document.getElementById('configButton');
     if (configButton) {
         configButton.addEventListener('click', () => {
             renderConfigModal();
-        });
-    }
-
-    // Rebuild index button
-    const rebuildIndexButton = document.getElementById('rebuildIndexButton');
-    if (rebuildIndexButton) {
-        rebuildIndexButton.addEventListener('click', async () => {
-            await handleRebuildIndex(refreshHomePage);
-        });
-    }
-
-    // Reset repository button
-    const resetRepoButton = document.getElementById('resetRepoButton');
-    if (resetRepoButton) {
-        resetRepoButton.addEventListener('click', async () => {
-            await handleResetRepository(refreshHomePage);
         });
     }
 
@@ -297,25 +257,11 @@ export const addEventSearchBarControls = (
 };
 
 /**
- * Adds click event listeners to file list buttons (directory open, view, delete)
- * @param {Function} renderRepoContent - Function to render repository content
+ * Adds click event listeners to file list buttons (view, delete)
  * @param {Function} renderDeleteModal - Function to render delete modal
  * @param {Function} renderViewModal - Function to render view modal
- * @param {Function} appState - Application state manager
  */
-export const addEventFileListButtons = (renderRepoContent, renderDeleteModal, renderViewModal, appState) => {
-    // Directory open buttons
-    const openDirButtons = document.querySelectorAll('.openDirBtn');
-    openDirButtons.forEach(button => {
-        button.addEventListener('click', async (event) => {
-            const path = event.currentTarget.getAttribute('data-path');
-            const { repo, directory } = appState.getState();
-            const fullPath = directory ? `${directory}/${path}` : path;
-
-            await executeWithAnimation(renderRepoContent, repo, fullPath);
-        });
-    });
-
+export const addEventFileListButtons = (renderDeleteModal, renderViewModal) => {
     // Delete file buttons
     const deleteButtons = document.querySelectorAll('.deleteFileBtn');
     deleteButtons.forEach(button => {

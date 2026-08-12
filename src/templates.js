@@ -489,11 +489,14 @@ export const WELCOME_TEMPLATES = {
      */
     userHeader: (userData, domElements, escapeHtml) => `
         <span>
-            <i id="${domElements.HOME_ICON}" 
-               class="bi bi-house-fill" 
-               style="cursor: pointer; font-size: 1.5rem;"
-               title="Go to homepage"
-               aria-label="Navigate to homepage"></i>
+            <button id="${domElements.HOME_ICON}"
+                    type="button"
+                    class="btn btn-link p-0 border-0 align-baseline text-decoration-none text-body"
+                    style="font-size: 1.5rem; line-height: 1;"
+                    title="Go to homepage"
+                    aria-label="Navigate to homepage">
+                <i class="bi bi-house-fill" aria-hidden="true"></i>
+            </button>
             Welcome, <strong>${escapeHtml(userData.name)}</strong>
             <img src="${userData.avatar_url}" 
                  class="rounded-circle" 
@@ -534,13 +537,6 @@ export const HOMEPAGE_TEMPLATES = {
      */
     searchBarAndControls: () => `
         <style>
-            /* Responsive button styles */
-            @media (max-width: 1200px) {
-                .action-buttons .btn {
-                    padding: 0.375rem 0.5rem;
-                    font-size: 0.875rem;
-                }
-            }
             @media (max-width: 992px) {
                 .action-buttons {
                     flex-wrap: wrap !important;
@@ -548,15 +544,6 @@ export const HOMEPAGE_TEMPLATES = {
                 }
                 .action-buttons .btn {
                     margin-right: 0 !important;
-                    margin-bottom: 0.5rem;
-                }
-            }
-            @media (max-width: 768px) {
-                .action-buttons .btn-text {
-                    display: none;
-                }
-                .action-buttons .btn {
-                    padding: 0.375rem 0.75rem;
                 }
             }
         </style>
@@ -566,33 +553,21 @@ export const HOMEPAGE_TEMPLATES = {
                 <div class="col-12 col-lg-4">
                     <div class="d-flex align-items-center">
                         <input type="text" id="searchFiles" class="form-control me-2 flex-grow-1" placeholder="Search files...">
-                        <button id="refreshButton" class="btn btn-outline-secondary me-2 flex-shrink-0" title="Refresh">
-                            <i class="bi bi-arrow-clockwise"></i>
-                        </button>
-                        <button id="backButton" class="btn btn-outline-secondary flex-shrink-0" title="Go Back">
-                            <i class="bi bi-arrow-left"></i>
+                        <button id="refreshButton" class="btn btn-outline-secondary flex-shrink-0" title="Refresh" aria-label="Refresh">
+                            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
                 <div class="col-12 col-lg-8 d-flex justify-content-lg-end">
-                    <div class="action-buttons d-flex w-100 w-lg-auto">
-                        <button id="addFolder" class="btn btn-secondary me-2" title="Add Folder">
-                            <i class="bi bi-folder-plus"></i><span class="btn-text ms-1">Add Folder</span>
+                    <div class="action-buttons d-flex">
+                        <button id="addFile" class="btn btn-outline-secondary me-2" title="Add Concept" aria-label="Add Concept">
+                            <i class="bi bi-plus-lg" aria-hidden="true"></i>
                         </button>
-                        <button id="addFile" class="btn btn-primary me-2" title="Add Concept">
-                            <i class="bi bi-plus-lg"></i><span class="btn-text ms-1">Add Concept</span>
+                        <button id="configButton" class="btn btn-outline-secondary me-2" title="Configure" aria-label="Configure">
+                            <i class="bi bi-gear" aria-hidden="true"></i>
                         </button>
-                        <button id="configButton" class="btn btn-outline-secondary me-2" title="Configure">
-                            <i class="bi bi-gear"></i><span class="btn-text ms-1">Configure</span>
-                        </button>
-                        <button id="rebuildIndexButton" class="btn btn-outline-warning me-2" title="Rebuild Index">
-                            <i class="bi bi-arrow-repeat"></i><span class="btn-text ms-1">Rebuild</span>
-                        </button>
-                        <button id="resetRepoButton" class="btn btn-outline-danger me-2" title="Reset Repository - Delete All Concepts">
-                            <i class="bi bi-trash"></i><span class="btn-text ms-1">Reset</span>
-                        </button>
-                        <button id="downloadRepo" class="btn btn-primary" title="Download Repository">
-                            <i class="bi bi-download"></i><span class="btn-text ms-1">Download</span>
+                        <button id="downloadRepo" class="btn btn-outline-secondary" title="Download" aria-label="Download">
+                            <i class="bi bi-download" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
@@ -603,28 +578,6 @@ export const HOMEPAGE_TEMPLATES = {
 
             <!-- Pagination controls -->
             <div id="paginationControls" class="mt-3"></div>
-        </div>
-    `,
-
-    /**
-     * Directory item template for file list
-     * @param {Object} file - Directory file object
-     * @returns {string} HTML template for directory item
-     */
-    directoryItem: (file) => `
-        <div class="list-group-item d-flex align-items-center">
-            <div class="d-flex flex-column flex-grow-1 me-3 overflow-hidden">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-folder-fill text-warning me-2"></i>
-                    <strong class="text-truncate">${file.name}</strong>
-                </div>
-                <small class="text-muted text-truncate">&nbsp;</small>
-            </div>
-            <div class="d-flex flex-shrink-0">
-                <button class="btn btn-outline-primary btn-sm openDirBtn" data-path="${file.name}">
-                    <i class="bi bi-arrow-right"></i> Open
-                </button>
-            </div>
         </div>
     `,
 

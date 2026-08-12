@@ -12,9 +12,9 @@
  * @requires events - UI event handling functions
  */
 
-import { appState, executeWithAnimation, fromBase64, showUserNotification, getErrorMessage, showAnimation, hideAnimation } from './common.js';
-import { getFiles, getRepoContents, getUserRepositories, getConfigurationSettings, rebuildIndex, deleteFile } from './api.js';
-import { renderAddModal, renderDeleteModal, renderAddFolderModal, renderViewModal, renderConfigModal } from './modals.js';
+import { appState, executeWithAnimation, fromBase64, showUserNotification, getErrorMessage } from './common.js';
+import { getFiles, getRepoContents, getUserRepositories, getConfigurationSettings } from './api.js';
+import { renderAddModal, renderDeleteModal, renderViewModal, renderConfigModal } from './modals.js';
 import { generateSpreadsheet } from './files.js';
 import { structureFiles } from './dictionary.js';
 import { HOMEPAGE_TEMPLATES } from './templates.js';
@@ -62,41 +62,38 @@ export const renderHomePage = async () => {
 /**
  * @async
  * @function refreshHomePage
- * @description Refreshes the currently displayed repository content without
- * losing the user's current location (directory path). Used when files have
- * been modified and the display needs to be updated.
+ * @description Refreshes the currently displayed repository content. Used when files
+ * have been modified and the display needs to be updated.
  * 
  * @throws {Error} If repository content cannot be refreshed or API calls fail
  */
 export const refreshHomePage = async () => {
     
-    const { repo, directory } = appState.getState();
+    const { repo } = appState.getState();
     if (repo) {
-        await executeWithAnimation(renderRepoContent, repo, directory || '');
+        await executeWithAnimation(renderRepoContent, repo);
     }
 }
 
 /**
  * @async
  * @function renderRepoContent
- * @description Fetches and displays the contents of a GitHub repository directory,
- * including concept files, folders, and metadata. Handles index.json
- * files for concept dictionary functionality.
+ * @description Fetches and displays the concept files in a GitHub repository,
+ * including index.json metadata for concept dictionary functionality.
  * 
  * @param {Object} repo - Repository object from GitHub API
  * @param {string} repo.owner.login - Repository owner's username
  * @param {string} repo.name - Repository name
  * @param {Object} repo.permissions - User's permissions for this repository
- * @param {string} directory - Path to the directory within the repository
  * 
  * @throws {Error} If repository content cannot be fetched or parsed
  */
-const renderRepoContent = async (repo, directory) => {
+const renderRepoContent = async (repo) => {
 
     const owner = repo.owner.login;
     const repoName = repo.name;
 
-    appState.setState({ repo, directory, owner, repoName });
+    appState.setState({ repo, owner, repoName });
 
     try {
         // Fetch the list of files
@@ -116,15 +113,10 @@ const renderRepoContent = async (repo, directory) => {
         }
 
         // Exclude non-concept files: filter out excluded files and non-JSON files (e.g., README.md)
-        let filesWithoutIndex = files.filter(file =>
+        const filesWithoutIndex = files.filter(file =>
             !FILE_FILTERS.EXCLUDED_FILES.includes(file.name) &&
-            (file.type === 'dir' || file.name.endsWith('.json'))
+            file.name.endsWith('.json')
         );
-
-        // If 'index.json' does NOT exist, display only directories
-        if (!indexFile) {
-            filesWithoutIndex = filesWithoutIndex.filter(file => file.type === 'dir');
-        }
 
         // Update appState with files and index
         appState.setState({ files: filesWithoutIndex, index: indexContent });
@@ -148,8 +140,8 @@ const renderRepoContent = async (repo, directory) => {
  * @function renderSearchBar
  * @description Creates the main interface for repository browsing including:
  * - Search input for filtering files
- * - Navigation buttons (refresh, back)
- * - Action buttons (add folder, add concept, configure, download)
+ * - Refresh button
+ * - Action buttons (add concept, configure, download)
  * - Placeholders for file list and pagination
  */
 const renderSearchBar = () => {
@@ -161,14 +153,10 @@ const renderSearchBar = () => {
     // Add event listeners for search bar and control buttons
     addEventSearchBarControls(
         renderFileList,
-        renderAddFolderModal,
         renderAddModal,
         refreshHomePage,
-        directoryBack,
         renderConfigModal,
-        handleDownloadRepo,
-        handleRebuildIndex,
-        handleResetRepository
+        handleDownloadRepo
     );
 };
 
@@ -176,7 +164,7 @@ const renderSearchBar = () => {
  * Renders the paginated file list with search functionality
  * 
  * @function renderFileList
- * @description Displays repository files and directories in a paginated, searchable list.
+ * @description Displays repository concept files in a paginated, searchable list.
  * Handles filtering, sorting, and pagination of repository contents.
  * 
  * @param {string} [searchTerm=''] - Optional search term to filter files
@@ -217,17 +205,8 @@ const renderFileList = (searchTerm = '') => {
         );
     });
 
-    // Sort so that directories come first
-    filteredFiles.sort((a, b) => {
-        if (a.type === 'dir' && b.type !== 'dir') {
-            return -1;
-        } else if (a.type !== 'dir' && b.type === 'dir') {
-            return 1;
-        } else {
-            // If both are of the same type, you can sort alphabetically (optional)
-            return a.name.localeCompare(b.name);
-        }
-    });
+    // Sort alphabetically by file name
+    filteredFiles.sort((a, b) => a.name.localeCompare(b.name));
 
     // Calculate pagination
     const totalItems = filteredFiles.length;
@@ -250,19 +229,14 @@ const renderFileList = (searchTerm = '') => {
         const keyValue = fileData?.key || '';
         const displayName = getFileNameWithoutExtension(file.name);
 
-        // Use appropriate template based on file type
-        if (file.type === 'dir') {
-            return HOMEPAGE_TEMPLATES.directoryItem(file);
-        } else {
-            return HOMEPAGE_TEMPLATES.fileItem(file, displayName, keyValue, hasWritePermission);
-        }
+        return HOMEPAGE_TEMPLATES.fileItem(file, displayName, keyValue, hasWritePermission);
     }).join('');
 
     // Render pagination controls
     renderPaginationControls(totalPages, page);
 
     // Add event listeners for file list buttons
-    addEventFileListButtons(renderRepoContent, renderDeleteModal, renderViewModal, appState);
+    addEventFileListButtons(renderDeleteModal, renderViewModal);
 };
 
 /**
@@ -284,20 +258,6 @@ const renderPaginationControls = (totalPages, currentPage) => {
 };
 
 /**
- * @async
- * @function directoryBack
- * @description Moves up one level in the directory hierarchy by removing the last
- * directory segment from the current path and re-rendering the repository content.
- * 
- * @throws {Error} If navigation fails or parent directory cannot be accessed
- */
-const directoryBack = async () => {
-    const { repo, directory } = appState.getState();
-    const newDirectory = directory.split('/').slice(0, -1).join('/');
-    await executeWithAnimation(renderRepoContent, repo, newDirectory);
-};
-
-/**
  * Handles repository download functionality
  * 
  * @async
@@ -313,13 +273,12 @@ const handleDownloadRepo = async () => {
     const jsonDataArray = [];
     const zipFiles = Object.keys(zip.files);
     const basePath = zipFiles[0];
-    const { files, directory } = appState.getState();
-    const directoryFiles = files.filter(file => file.name.endsWith('.json'));
+    const { files } = appState.getState();
+    const conceptFiles = files.filter(file => file.name.endsWith('.json'));
+    const failed = [];
 
-    for (const file of directoryFiles) {
-        const fullPath = directory 
-            ? `${basePath}${directory}/${file.name}` 
-            : `${basePath}${file.name}`;
+    for (const file of conceptFiles) {
+        const fullPath = `${basePath}${file.name}`;
 
         if (zip.files[fullPath]) {
             try {
@@ -327,153 +286,18 @@ const handleDownloadRepo = async () => {
                 const jsonData = JSON.parse(fileContent);
                 jsonDataArray.push(jsonData);
             } catch (error) {
+                failed.push(file.name);
                 console.error(`Error processing file ${file.name}:`, error);
             }
+        } else {
+            failed.push(file.name);
         }
+    }
+
+    if (failed.length > 0) {
+        showUserNotification('warning', `${failed.length} of ${conceptFiles.length} concepts could not be read and were left out of the export.`);
     }
 
     const { data: structuredData, columnTypes } = structureFiles(jsonDataArray);
     generateSpreadsheet(structuredData, columnTypes);
-};
-
-/**
- * Handles index rebuild functionality
- * 
- * @async
- * @function handleRebuildIndex
- * @param {Function} refreshHomePage - Function to refresh the homepage after rebuild
- * @description Calls the backend API to rebuild the index.json file for the current repository
- * 
- * @throws {Error} If rebuild fails or API call fails
- */
-export const handleRebuildIndex = async (refreshHomePage) => {
-    try {
-        // Confirm with user before rebuilding
-        const confirmed = confirm('Are you sure you want to rebuild the index.json file? This will scan all concept files and regenerate the index.');
-        
-        if (!confirmed) {
-            return;
-        }
-
-        // Show loading animation
-        showAnimation();
-        
-        // Call the rebuild API
-        await rebuildIndex();
-        
-        // Show success message
-        showUserNotification('success', 'Index rebuilt successfully!');
-        
-        // Refresh the page to show updated index
-        if (refreshHomePage) {
-            await refreshHomePage();
-        }
-        
-    } catch (error) {
-        console.error('Error rebuilding index:', error);
-        showUserNotification('error', `Failed to rebuild index: ${getErrorMessage(error)}`);
-    } finally {
-        // Hide loading animation
-        hideAnimation();
-    }
-};
-
-/**
- * Handles resetting the repository by deleting all concept files
- * 
- * @async
- * @function handleResetRepository
- * @param {Function} refreshHomePage - Function to refresh the homepage after reset
- * @description Deletes all concept JSON files in the repository (excludes config.json, index.json, .gitkeep)
- * 
- * @throws {Error} If deletion fails or API call fails
- */
-export const handleResetRepository = async (refreshHomePage) => {
-    try {
-        const { files, index } = appState.getState();
-        
-        // Get all concept files from the index (these are the JSON files we want to delete)
-        const conceptFiles = index._files ? Object.keys(index._files) : [];
-        
-        if (conceptFiles.length === 0) {
-            showUserNotification('info', 'No concept files to delete.');
-            return;
-        }
-
-        // Confirm with user before deleting - this is destructive!
-        const confirmed = confirm(
-            `⚠️ WARNING: This will permanently delete ALL ${conceptFiles.length} concept files in this repository!\n\n` +
-            `This action cannot be undone.\n\n` +
-            `Are you sure you want to continue?`
-        );
-        
-        if (!confirmed) {
-            return;
-        }
-
-        // Double confirm for safety
-        const doubleConfirmed = confirm(
-            `FINAL CONFIRMATION:\n\n` +
-            `You are about to delete ${conceptFiles.length} files.\n\n` +
-            `Type OK to proceed.`
-        );
-        
-        if (!doubleConfirmed) {
-            return;
-        }
-
-        // Show loading animation
-        showAnimation();
-        
-        let deletedCount = 0;
-        let failedCount = 0;
-        const errors = [];
-
-        // Delete each concept file
-        for (const fileName of conceptFiles) {
-            try {
-                // Get the file's SHA (needed for deletion)
-                const fileResponse = await getFiles(fileName);
-                const sha = fileResponse.data.sha;
-                
-                await deleteFile(fileName, sha);
-                deletedCount++;
-                
-                // Update progress in console
-                console.log(`Deleted ${deletedCount}/${conceptFiles.length}: ${fileName}`);
-            } catch (error) {
-                failedCount++;
-                errors.push(`${fileName}: ${error.message}`);
-                console.error(`Failed to delete ${fileName}:`, error);
-            }
-        }
-
-        // Show results
-        if (failedCount === 0) {
-            showUserNotification('success', `Successfully deleted all ${deletedCount} concept files!`);
-        } else {
-            showUserNotification('warning', `Deleted ${deletedCount} files. Failed to delete ${failedCount} files.`);
-            console.error('Failed deletions:', errors);
-        }
-
-        // Rebuild the index after deletion
-        try {
-            await rebuildIndex();
-            showUserNotification('success', 'Index rebuilt after reset.');
-        } catch (indexError) {
-            console.error('Failed to rebuild index:', indexError);
-        }
-
-        // Refresh the page
-        if (refreshHomePage) {
-            await refreshHomePage();
-        }
-        
-    } catch (error) {
-        console.error('Error resetting repository:', error);
-        showUserNotification('error', `Failed to reset repository: ${getErrorMessage(error)}`);
-    } finally {
-        // Hide loading animation
-        hideAnimation();
-    }
 };

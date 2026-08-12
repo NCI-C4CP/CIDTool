@@ -78,7 +78,6 @@ export const API_CONFIG = {
     /** Default commit messages for different operations */
     COMMIT_MESSAGES: {
         ADD_FILE: 'file added via CID Tool',
-        ADD_FOLDER: 'folder added via CID Tool',
         UPDATE_FILE: 'file modified via CID Tool',
         DELETE_FILE: 'file deleted via CID Tool'
     },
@@ -89,12 +88,19 @@ export const API_CONFIG = {
         UNAUTHORIZED: 401,
         FORBIDDEN: 403,
         NOT_FOUND: 404,
+        REQUEST_TIMEOUT: 408,
         UNPROCESSABLE_ENTITY: 422,
+        TOO_MANY_REQUESTS: 429,
         INTERNAL_SERVER_ERROR: 500
     },
     /** Request timeout in milliseconds */
     TIMEOUT: 30000
 };
+
+/**
+ * Fraction of the GitHub rate limit remaining at which the user is warned
+ */
+export const RATE_LIMIT_WARN_THRESHOLD = 0.1;
 
 /**
  * Modal configuration settings

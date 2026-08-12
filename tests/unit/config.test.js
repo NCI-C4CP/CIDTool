@@ -183,7 +183,6 @@ describe('API_CONFIG', () => {
         expect(API_CONFIG.COMMIT_MESSAGES.ADD_FILE).toBeDefined();
         expect(API_CONFIG.COMMIT_MESSAGES.UPDATE_FILE).toBeDefined();
         expect(API_CONFIG.COMMIT_MESSAGES.DELETE_FILE).toBeDefined();
-        expect(API_CONFIG.COMMIT_MESSAGES.ADD_FOLDER).toBeDefined();
     });
     
     test('has standard HTTP status codes', () => {

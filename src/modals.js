@@ -13,7 +13,7 @@
  */
 
 import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, initReferenceDropdown, validateFormFields, showUserNotification, formatConceptDisplay, extractConcept } from './common.js';
-import { addFile, deleteFile, addFolder, getConcept, getFiles, updateFile, checkReferences } from './api.js';
+import { addFile, deleteFile, getConcept, getFiles, updateFile, checkReferences } from './api.js';
 import { refreshHomePage } from './homepage.js';
 import { MODAL_CONFIG, CONCEPT_TYPE_COLORS } from './config.js';
 import { MODAL_TEMPLATES, FORM_UTILS } from './templates.js';
@@ -1113,73 +1113,6 @@ export const renderUploadModal = async (files) => {
 }
 
 /**
- * Renders a modal for creating new folders in the repository
- * 
- * @function renderAddFolderModal
- * 
- * @returns {void}
- * @throws {Error} Throws error if modal setup or folder creation fails
- */
-export const renderAddFolderModal = () => {
-    try {
-        const { modal, header, body, footer } = ModalUtils.setupModal('Add Folder');
-
-        // Initialize the modal body with Folder Name field using form utility
-        const folderNameField = { id: 'folderName', label: 'Folder Name', required: true, type: 'text' };
-        body.innerHTML = FORM_UTILS.generateFormField(folderNameField);
-
-        // Update the modal footer using template
-        footer.innerHTML = MODAL_TEMPLATES.footer([
-            { text: 'Cancel', class: MODAL_CONFIG.MODAL_CLASSES.SECONDARY, attributes: 'data-bs-dismiss="modal"' },
-            { text: 'Create', class: MODAL_CONFIG.MODAL_CLASSES.SUCCESS }
-        ]);
-
-    // Show the modal
-    new bootstrap.Modal(modal).show();
-
-    // Add event listener for the Create button
-    const createButton = modal.querySelector('.btn-outline-success');
-    createButton.addEventListener('click', async () => {
-        // Get the folder name
-        const folderName = document.getElementById('folderName').value.trim();
-
-        // Validate the folder name
-        if (!folderName) {
-            alert('Folder Name is mandatory.');
-            return;
-        }
-
-        // Optional: Validate folder name for illegal characters
-        const illegalChars = /[\\/:*?"<>|]/;
-        if (illegalChars.test(folderName)) {
-            alert('Folder Name contains illegal characters.');
-            return;
-        }
-
-        // Show loading animation (assuming this function exists)
-        showAnimation();
-
-        // Create the folder (assuming addFolder is defined elsewhere)
-        try {
-            await addFolder(folderName);
-            // Hide the modal
-            bootstrap.Modal.getInstance(modal).hide();
-            // Refresh the home page (assuming renderHomePage is defined elsewhere)
-            refreshHomePage();
-        } catch (error) {
-            console.error('Error creating folder:', error);
-            alert('An error occurred while creating the folder.');
-        } finally {
-            // Hide loading animation
-            hideAnimation();
-        }
-    });
-    } catch (error) {
-        ModalUtils.handleModalError(error, 'Add folder modal setup', modal);
-    }
-}
-
-/**
  * Renders a comprehensive configuration modal for managing concept field definitions
  * 
  * @async
@@ -1305,8 +1238,9 @@ export const renderConfigModal = async () => {
         showAnimation();
         
         try {
-            // Build new config object from UI
-            const newConfig = {};
+            // Preserve any config keys this modal doesn't manage
+            const { config: existingConfig } = appState.getState();
+            const newConfig = { ...(existingConfig || {}) };
             
             MODAL_CONFIG.CONCEPT_TYPES.forEach(type => {
                 newConfig[type] = [];
@@ -1343,8 +1277,6 @@ export const renderConfigModal = async () => {
                     newConfig[type].push(fieldConfig);
                 });
             });
-
-            console.log(newConfig);
             
             // Save to a config file in the repository
             const file = await getFiles('config.json');
