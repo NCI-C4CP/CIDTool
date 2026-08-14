@@ -664,7 +664,8 @@ export const escapeHtml = (text) => {
  * @returns {boolean} True if error indicates token issue
  */
 export const isTokenError = (error) => {
-    return error.message?.includes('401') || 
+    return error.status === 401 ||
+           error.message?.includes('401') || 
            error.message?.includes('Unauthorized') ||
            error.message?.includes('token');
 };

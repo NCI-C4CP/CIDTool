@@ -16,8 +16,7 @@ import { toBase64, isLocal, appState, fromBase64, isTokenError, showUserNotifica
  * @returns {string} The API base URL
  */
 const getApiBaseUrl = () => {
-    //return isLocal() ? API_CONFIG.BASE_URL_LOCAL : API_CONFIG.BASE_URL;
-    return API_CONFIG.BASE_URL;
+    return isLocal() ? API_CONFIG.BASE_URL_LOCAL : API_CONFIG.BASE_URL;
 };
 
 /**
@@ -361,6 +360,81 @@ export const getFiles = async (fileName = '') => {
         { method: 'GET' },
         'Get files'
     );
+};
+
+/**
+ * Lists every root-level .json file in the repository via the Git Trees API
+ * 
+ * Replaces the contents-API directory listing, which silently stops at 1,000 entries.
+ * 
+ * @async
+ * @function getRepoTree
+ * @param {string} ref - Branch name or commit SHA to read the tree from
+ * 
+ * @returns {Promise<Object>} `{ files, truncated }` where each file is `{ name, sha, size }`
+ * @throws {Error} Throws error if the tree cannot be read
+ */
+export const getRepoTree = async (ref) => {
+    const { owner, repoName } = appState.getState();
+
+    const response = await makeApiRequest(
+        `getTree&owner=${owner}&repo=${repoName}&ref=${encodeURIComponent(ref)}`,
+        { method: 'GET' },
+        'Get repository tree'
+    );
+
+    return {
+        // `name` keeps the shape the file list already renders from
+        files: (response.data || []).map(entry => ({
+            name: entry.path,
+            sha: entry.sha,
+            size: entry.size
+        })),
+        truncated: response.truncated === true
+    };
+};
+
+/**
+ * Reads a repository file as raw text, bypassing the 1MB contents-API ceiling
+ * 
+ * @async
+ * @function getFileContentRaw
+ * @param {string} path - Repository-relative file path
+ * 
+ * @returns {Promise<string|null>} File contents, or null if the file does not exist
+ * @throws {Error} Throws error for any failure other than a missing file
+ */
+export const getFileContentRaw = async (path) => {
+    const { owner, repoName } = appState.getState();
+
+    try {
+        const response = await makeApiRequest(
+            `getFileContent&owner=${owner}&repo=${repoName}&path=${encodeURIComponent(path)}`,
+            { method: 'GET' },
+            'Get file content'
+        );
+
+        return typeof response.content === 'string' ? response.content : null;
+    } catch (error) {
+        if (error.status === 404) return null;
+        throw error;
+    }
+};
+
+/**
+ * Loads and parses the repository index.json
+ * 
+ * @async
+ * @function getIndexContent
+ * 
+ * @returns {Promise<Object>} Parsed index, or an empty object when the repository has none
+ * @throws {Error} Throws error if the index exists but cannot be read or parsed
+ */
+export const getIndexContent = async () => {
+    const content = await getFileContentRaw('index.json');
+    if (!content || !content.trim()) return {};
+
+    return JSON.parse(content);
 };
 
 /**

@@ -12,8 +12,8 @@
  * @requires events - UI event handling functions
  */
 
-import { appState, executeWithAnimation, fromBase64, showUserNotification, getErrorMessage } from './common.js';
-import { getFiles, getRepoContents, getUserRepositories, getConfigurationSettings } from './api.js';
+import { appState, executeWithAnimation, showUserNotification, getErrorMessage } from './common.js';
+import { getRepoTree, getIndexContent, getRepoContents, getUserRepositories, getConfigurationSettings } from './api.js';
 import { renderAddModal, renderDeleteModal, renderViewModal, renderConfigModal } from './modals.js';
 import { generateSpreadsheet } from './files.js';
 import { structureFiles } from './dictionary.js';
@@ -96,21 +96,16 @@ const renderRepoContent = async (repo) => {
     appState.setState({ repo, owner, repoName });
 
     try {
-        // Fetch the list of files
-        const fileData = await getFiles();
-        const files = fileData.data;
+        // Trees API rather than a directory listing: contents caps at 1,000 entries
+        const { files, truncated } = await getRepoTree(repo.default_branch);
 
-        // Initialize index content
-        let indexContent = {};
-
-        // Find 'index.json' in the files list
-        const indexFile = files.find(file => file.name === 'index.json');
-
-        if (indexFile) {
-            const indexResponse = await getFiles(indexFile.name); // Assuming getFiles can fetch individual files
-            const indexContentString = fromBase64(indexResponse.data.content);
-            indexContent = JSON.parse(indexContentString);
+        if (truncated) {
+            showUserNotification('warning', 'This repository is too large to list completely. Some concepts are not shown.');
         }
+
+        const indexContent = files.some(file => file.name === 'index.json')
+            ? await getIndexContent()
+            : {};
 
         // Exclude non-concept files: filter out excluded files and non-JSON files (e.g., README.md)
         const filesWithoutIndex = files.filter(file =>
@@ -130,7 +125,7 @@ const renderRepoContent = async (repo) => {
         
         // Still render the basic interface so user can navigate back
         renderSearchBar();
-        document.getElementById('file-list').innerHTML = '<div class="alert alert-danger">Unable to load repository contents.</div>';
+        document.getElementById('fileList').innerHTML = '<div class="alert alert-danger">Unable to load repository contents.</div>';
     }
 }
 
