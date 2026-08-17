@@ -13,9 +13,9 @@
  */
 
 import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, initReferenceDropdown, validateFormFields, showUserNotification, formatConceptDisplay, extractConcept } from './common.js';
-import { addFile, deleteFile, getConcept, getFiles, updateFile, checkReferences } from './api.js';
+import { addFile, deleteFile, getConcept, getFiles, updateFile, checkReferences, commitFiles } from './api.js';
 import { refreshHomePage } from './homepage.js';
-import { MODAL_CONFIG, CONCEPT_TYPE_COLORS } from './config.js';
+import { MODAL_CONFIG, CONCEPT_TYPE_COLORS, API_CONFIG } from './config.js';
 import { MODAL_TEMPLATES, FORM_UTILS } from './templates.js';
 
 /**
@@ -633,12 +633,15 @@ export const renderViewModal = async (event) => {
         
         ({ modal, header, body, footer } = ModalUtils.getModalElements());
         
-        const { content } = await getFileContent(file);
+        const { content, meta } = await getFileContent(file);
         
         // Validate that we have content and it's a proper concept
         if (!content || typeof content !== 'object') {
             throw new Error('Invalid concept data');
         }
+
+        // Captured at load, not at save: this is what makes a concurrent edit fail
+        const loadedSha = meta?.sha;
         
         const { config, repo } = appState.getState();
         const conceptType = content['object_type'] || 'PRIMARY'; // Default to PRIMARY if not specified
@@ -701,7 +704,7 @@ export const renderViewModal = async (event) => {
                 
                 document.getElementById('saveButton').addEventListener('click', async () => {
                     // Collect edited data and save
-                    await saveEditedConcept(content, typeConfig, file);
+                    await saveEditedConcept(content, typeConfig, file, loadedSha);
                 });
             } else {
                 footer.innerHTML = MODAL_TEMPLATES.footer([
@@ -1082,20 +1085,26 @@ export const renderUploadModal = async (files) => {
         // Show the modal
         ModalUtils.showModal(modal);
 
-        // Upload files sequentially
-        for (const { file, fileRow } of fileRows) {
-            // Update status to "Processing..." using template
-            const statusIndicator = fileRow.querySelector('.status-indicator');
-            statusIndicator.innerHTML = MODAL_TEMPLATES.uploadStatus.processing();
+        // Batched: one commit per chunk instead of two writes per file
+        for (let start = 0; start < fileRows.length; start += API_CONFIG.COMMIT_BATCH_SIZE) {
+            const batch = fileRows.slice(start, start + API_CONFIG.COMMIT_BATCH_SIZE);
+
+            batch.forEach(({ fileRow }) => {
+                fileRow.querySelector('.status-indicator').innerHTML = MODAL_TEMPLATES.uploadStatus.processing();
+            });
 
             try {
-                await addFile(file.name, file.content);
-                // On success, update the status indicator using template
-                statusIndicator.innerHTML = MODAL_TEMPLATES.uploadStatus.success();
+                await commitFiles(batch.map(({ file }) => file));
+
+                batch.forEach(({ fileRow }) => {
+                    fileRow.querySelector('.status-indicator').innerHTML = MODAL_TEMPLATES.uploadStatus.success();
+                });
             } catch (error) {
-                // On failure, update the status indicator using template
-                statusIndicator.innerHTML = MODAL_TEMPLATES.uploadStatus.failed();
-                console.error(`Failed to upload ${file.name}:`, error);
+                // The commit is atomic, so a failure fails the whole batch
+                batch.forEach(({ fileRow }) => {
+                    fileRow.querySelector('.status-indicator').innerHTML = MODAL_TEMPLATES.uploadStatus.failed();
+                });
+                console.error(`Failed to commit ${batch.length} files:`, error);
             }
         }
 
@@ -1325,10 +1334,11 @@ function generateFieldRows(fields, conceptType) {
  * @param {Object} originalContent - Original concept data before editing
  * @param {Array<Object>} typeConfig - Field configuration for the concept type
  * @param {string} file - Filename of the concept being edited
+ * @param {string} loadedSha - SHA of the file as it was when the editor opened
  * @returns {Promise<void>} Resolves when concept is successfully saved
  * @throws {Error} Throws error if validation fails or file update fails
  */
-async function saveEditedConcept(originalContent, typeConfig, file) {
+async function saveEditedConcept(originalContent, typeConfig, file, loadedSha) {
     try {
         showAnimation();
         
@@ -1378,20 +1388,16 @@ async function saveEditedConcept(originalContent, typeConfig, file) {
         // Prepare the file content
         const content = JSON.stringify(updatedContent, null, 2);
         
-        // Get the file SHA (needed for update)
-        const fileDetails = await getFiles(file);
-        const sha = fileDetails.data.sha;
-        
-        // Update the file
-        await updateFile(file, content, sha);
+        // Re-reading the sha here would always match and defeat the check
+        await updateFile(file, content, loadedSha);
         
         // Close the modal
         const modal = document.getElementById('modal');
         bootstrap.Modal.getInstance(modal).hide();
         
     } catch (error) {
+        // validateResponse has already shown the message, including the 409 conflict case
         console.error('Error saving concept:', error);
-        alert('An error occurred while saving the concept.');
     } finally {
         hideAnimation();
     }

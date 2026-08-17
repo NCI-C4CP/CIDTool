@@ -438,6 +438,42 @@ export const getIndexContent = async () => {
 };
 
 /**
+ * Commits many files as a single commit via the Git Data API
+ * 
+ * The per-file Contents API costs 2 writes per concept against GitHub's 500-per-hour
+ * secondary limit, which makes a large import impossible. This is 3 writes per batch,
+ * and the files land atomically with index.json.
+ * 
+ * @async
+ * @function commitFiles
+ * @param {Array<Object>} files - Files to write, each `{ name, content }` with content as text
+ * @param {Array<string>} [deletions=[]] - Paths to remove in the same commit
+ * @param {string} [message] - Commit message
+ * 
+ * @returns {Promise<Object>} `{ commitSha, treeSha, committed, deleted }`
+ * @throws {Error} Throws error if the commit fails or the branch moved
+ */
+export const commitFiles = async (files, deletions = [], message) => {
+    const { owner, repoName, repo } = appState.getState();
+
+    return await makeApiRequest(
+        'commitFiles',
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                owner,
+                repo: repoName,
+                branch: repo.default_branch,
+                message: message || API_CONFIG.COMMIT_MESSAGES.IMPORT_FILES(files.length),
+                files: files.map(file => ({ path: file.name, content: file.content })),
+                deletions
+            })
+        },
+        'Commit files'
+    );
+};
+
+/**
  * Retrieves all repositories accessible to the authenticated user
  * 
  * @async

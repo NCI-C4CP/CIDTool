@@ -79,7 +79,8 @@ export const API_CONFIG = {
     COMMIT_MESSAGES: {
         ADD_FILE: 'file added via CID Tool',
         UPDATE_FILE: 'file modified via CID Tool',
-        DELETE_FILE: 'file deleted via CID Tool'
+        DELETE_FILE: 'file deleted via CID Tool',
+        IMPORT_FILES: (count) => `${count} concept${count === 1 ? '' : 's'} imported via CID Tool`
     },
     /** HTTP status codes for error handling */
     STATUS_CODES: {
@@ -94,7 +95,9 @@ export const API_CONFIG = {
         INTERNAL_SERVER_ERROR: 500
     },
     /** Request timeout in milliseconds */
-    TIMEOUT: 30000
+    TIMEOUT: 30000,
+    /** Files per batched commit. The backend rejects more than 1000 per request. */
+    COMMIT_BATCH_SIZE: 500
 };
 
 /**

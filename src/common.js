@@ -708,6 +708,7 @@ export const getErrorMessage = (error) => {
     if (error.status === 404) return 'Repository not found or access denied';
     if (error.status === 403) return 'Insufficient permissions to access repository';
     if (error.status === 401) return 'Authentication required. Please log in again.';
+    if (error.status === 409) return 'This was changed by someone else while you were editing. Reopen it to see the current version, then reapply your changes.';
     if (error.status === 500) return 'GitHub service temporarily unavailable';
     if (error.status === 422) return 'Invalid repository or file format';
     if (error.name === 'NetworkError') return 'Network connection error. Please check your internet connection.';
