@@ -8,7 +8,8 @@
  */
 
 import { REDIRECT_URI, REDIRECT_URI_LOCAL, API_CONFIG, RATE_LIMIT_WARN_THRESHOLD } from './config.js';
-import { toBase64, isLocal, appState, fromBase64, isTokenError, showUserNotification, getErrorMessage } from './common.js';
+import { toBase64, isLocal, appState, fromBase64, isTokenError, showUserNotification, getErrorMessage, normalizeConcept } from './common.js';
+import { readCachedConcepts, writeCachedConcepts } from './cache.js';
 
 /**
  * Gets the appropriate API base URL based on environment
@@ -136,14 +137,15 @@ const recordRateLimit = (payload, operation) => {
  */
 const makeApiRequest = async (endpoint, options = {}, operation = 'API request') => {
     const url = `${getApiBaseUrl()}${endpoint}`;
-    
+    const { timeout = API_CONFIG.TIMEOUT, ...fetchOptions } = options;
+
     const requestOptions = {
         headers: createHeaders(options.includeAuth !== false),
-        ...options
+        ...fetchOptions
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
     requestOptions.signal = controller.signal;
     
     try {
@@ -165,7 +167,7 @@ const makeApiRequest = async (endpoint, options = {}, operation = 'API request')
             const timeoutError = new Error(`${operation} timed out`);
             timeoutError.status = 408;
             showUserNotification('error', `${operation} timed out. Please try again.`);
-            console.error(`${operation} timed out after ${API_CONFIG.TIMEOUT}ms`);
+            console.error(`${operation} timed out after ${timeout}ms`);
             throw timeoutError;
         }
 
@@ -240,10 +242,63 @@ export const getRepoContents = async () => {
         `getRepo&owner=${owner}&repo=${repoName}`,
         { 
             method: 'GET', 
-            responseType: 'blob' 
+            responseType: 'blob',
+            // A multi-megabyte archive plus a cold start does not fit the default timeout
+            timeout: API_CONFIG.ARCHIVE_TIMEOUT
         },
         'Download repository contents'
     );
+};
+
+/**
+ * Loads every concept in the repository, from the local cache when possible
+ *
+ * Falls back to downloading the repository archive, which is one request regardless
+ * of concept count, then caches the result against the current tree SHA.
+ *
+ * @async
+ * @function loadAllConcepts
+ * @returns {Promise<Object>} `{ concepts, failed, fromCache }`
+ * @throws {Error} Throws if the archive cannot be downloaded or opened
+ */
+export const loadAllConcepts = async () => {
+    const { owner, repoName, treeSha, files } = appState.getState();
+
+    const cached = await readCachedConcepts(owner, repoName, treeSha);
+    if (cached) return { concepts: cached, failed: [], fromCache: true };
+
+    const archive = await getRepoContents();
+    const zip = await JSZip.loadAsync(archive);
+
+    // GitHub wraps the archive in a single owner-repo-sha directory
+    const basePath = Object.keys(zip.files)[0];
+    const conceptFiles = (files || []).filter(file => file.name.endsWith('.json'));
+
+    const concepts = [];
+    const failed = [];
+
+    for (const file of conceptFiles) {
+        const entry = zip.files[`${basePath}${file.name}`];
+
+        if (!entry) {
+            failed.push(file.name);
+            continue;
+        }
+
+        try {
+            concepts.push(normalizeConcept(JSON.parse(await entry.async('string'))));
+        } catch (error) {
+            failed.push(file.name);
+            console.error(`Error processing file ${file.name}:`, error);
+        }
+    }
+
+    // Only cache a clean read, so a partial failure is not remembered as complete
+    if (failed.length === 0) {
+        await writeCachedConcepts(owner, repoName, treeSha, concepts);
+    }
+
+    return { concepts, failed, fromCache: false };
 };
 
 /**
@@ -371,7 +426,7 @@ export const getFiles = async (fileName = '') => {
  * @function getRepoTree
  * @param {string} ref - Branch name or commit SHA to read the tree from
  * 
- * @returns {Promise<Object>} `{ files, truncated }` where each file is `{ name, sha, size }`
+ * @returns {Promise<Object>} `{ files, sha, truncated }` where each file is `{ name, sha, size }`
  * @throws {Error} Throws error if the tree cannot be read
  */
 export const getRepoTree = async (ref) => {
@@ -390,6 +445,8 @@ export const getRepoTree = async (ref) => {
             sha: entry.sha,
             size: entry.size
         })),
+        // Tree SHA of the whole repo, used to key the concept cache
+        sha: response.sha || null,
         truncated: response.truncated === true
     };
 };

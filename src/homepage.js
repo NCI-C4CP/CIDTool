@@ -13,7 +13,7 @@
  */
 
 import { appState, executeWithAnimation, showUserNotification, getErrorMessage } from './common.js';
-import { getRepoTree, getIndexContent, getRepoContents, getUserRepositories, getConfigurationSettings } from './api.js';
+import { getRepoTree, getIndexContent, loadAllConcepts, getUserRepositories, getConfigurationSettings } from './api.js';
 import { renderAddModal, renderDeleteModal, renderViewModal, renderConfigModal } from './modals.js';
 import { generateSpreadsheet } from './files.js';
 import { structureFiles } from './dictionary.js';
@@ -97,7 +97,7 @@ const renderRepoContent = async (repo) => {
 
     try {
         // Trees API rather than a directory listing: contents caps at 1,000 entries
-        const { files, truncated } = await getRepoTree(repo.default_branch);
+        const { files, sha, truncated } = await getRepoTree(repo.default_branch);
 
         if (truncated) {
             showUserNotification('warning', 'This repository is too large to list completely. Some concepts are not shown.');
@@ -114,7 +114,7 @@ const renderRepoContent = async (repo) => {
         );
 
         // Update appState with files and index
-        appState.setState({ files: filesWithoutIndex, index: indexContent });
+        appState.setState({ files: filesWithoutIndex, index: indexContent, treeSha: sha });
 
         await getConfigurationSettings();
         renderSearchBar();
@@ -263,36 +263,12 @@ const renderPaginationControls = (totalPages, currentPage) => {
  * @throws {Error} If download fails, ZIP extraction fails, or spreadsheet generation fails
  */
 const handleDownloadRepo = async () => {
-    const contents = await getRepoContents();
-    const zip = await JSZip.loadAsync(contents);
-    const jsonDataArray = [];
-    const zipFiles = Object.keys(zip.files);
-    const basePath = zipFiles[0];
-    const { files } = appState.getState();
-    const conceptFiles = files.filter(file => file.name.endsWith('.json'));
-    const failed = [];
-
-    for (const file of conceptFiles) {
-        const fullPath = `${basePath}${file.name}`;
-
-        if (zip.files[fullPath]) {
-            try {
-                const fileContent = await zip.files[fullPath].async('string');
-                const jsonData = JSON.parse(fileContent);
-                jsonDataArray.push(jsonData);
-            } catch (error) {
-                failed.push(file.name);
-                console.error(`Error processing file ${file.name}:`, error);
-            }
-        } else {
-            failed.push(file.name);
-        }
-    }
+    const { concepts, failed } = await loadAllConcepts();
 
     if (failed.length > 0) {
-        showUserNotification('warning', `${failed.length} of ${conceptFiles.length} concepts could not be read and were left out of the export.`);
+        showUserNotification('warning', `${failed.length} concept${failed.length === 1 ? '' : 's'} could not be read and were left out of the export.`);
     }
 
-    const { data: structuredData, columnTypes } = structureFiles(jsonDataArray);
+    const { data: structuredData, columnTypes } = structureFiles(concepts);
     generateSpreadsheet(structuredData, columnTypes);
 };

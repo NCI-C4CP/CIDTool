@@ -96,6 +96,8 @@ export const API_CONFIG = {
     },
     /** Request timeout in milliseconds */
     TIMEOUT: 30000,
+    /** Timeout for whole-repository archive downloads, which are far slower than a normal call */
+    ARCHIVE_TIMEOUT: 120000,
     /** Files per batched commit. The backend rejects more than 1000 per request. */
     COMMIT_BATCH_SIZE: 500
 };
