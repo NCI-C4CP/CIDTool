@@ -487,18 +487,11 @@ export const structureFiles = (data) => {
     };
 
     // Helper: check if a reference field allows multiple values
-    const isRefAllowMultiple = (srcType, tgtType) => {
-        const tc = config?.[srcType] || [];
-        const field = tc.find(f => f.type === 'reference' && f.referencesType === tgtType);
-        return field?.allowMultiple === true;
-    };
-
     // Resolve reference field names from config
     const secToParent = getRefFieldId('SECONDARY', 'PRIMARY');
     const qToSecondary = getRefFieldId('QUESTION', 'SECONDARY');
     const qToSource = getRefFieldId('QUESTION', 'SOURCE');
     const qToResponses = getRefFieldId('QUESTION', 'RESPONSE');
-    const qToSecondaryIsMultiple = isRefAllowMultiple('QUESTION', 'SECONDARY');
 
     const rows = [headers];
     const placed = new Set(); // Track placed concept CIDs

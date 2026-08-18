@@ -166,7 +166,7 @@ const renderSearchBar = () => {
  */
 const renderFileList = (searchTerm = '') => {
     const fileListDiv = document.getElementById('fileList');
-    const { repo, files, index, currentPage, itemsPerPage } = appState.getState();
+    const { repo, files, index, currentPage } = appState.getState();
 
     // If no files, display message
     if (!files || files.length === 0) {

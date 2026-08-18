@@ -3,8 +3,6 @@ import { assignConcepts, validateImportData } from "./concepts.js";
 import { appState, removeEventListeners, showAnimation, hideAnimation, escapeHtml } from "./common.js";
 import { renderUploadModal } from "./modals.js";
 import { MODAL_CONFIG, CONCEPT_TYPE_COLORS } from "./config.js";
-import { addFile } from "./api.js";
-import { refreshHomePage } from "./homepage.js";
 
 /**
  * Extracts the concept type from a header string (e.g., "PRIMARY_KEY" → "PRIMARY")
@@ -205,7 +203,6 @@ export const objectDropped = async (e) => {
  * @param {FileSystemFileHandle} handle - File system handle for the dropped file
  */
 const handleFile = async (handle) => {
-    const zoneContent = document.getElementById('drop-zone-content');
     const file = await handle.getFile();
 
     // Validate file type
@@ -228,9 +225,7 @@ const handleFile = async (handle) => {
  */
 const processDictionaryFile = async (file) => {
     const zoneContent = document.getElementById('drop-zone-content');
-    const validationErrors = document.getElementById('validation-errors');
-    const importSummary = document.getElementById('import-summary');
-    
+
     // Reset UI state
     hideValidationErrors();
     hideImportSummary();
@@ -441,7 +436,7 @@ const showImportSummary = (conceptObjects, validationResult = null) => {
  * @returns {string} HTML string for error display
  */
 const buildValidationErrorsHtml = (validationResult) => {
-    const { errors, summary } = validationResult;
+    const { errors } = validationResult;
     
     // Group errors by type for better organization
     const errorsByType = {
@@ -645,7 +640,7 @@ const handleDirectory = async (directoryHandle) => {
     const importModal = bootstrap.Modal.getInstance(document.getElementById('importModal'));
     const zoneContent = document.getElementById('drop-zone-content');
 
-    for await (const [name, handle] of directoryHandle.entries()) {
+    for await (const [, handle] of directoryHandle.entries()) {
         if (handle.kind === 'file') {
             const file = await handle.getFile();
             files.push(file);

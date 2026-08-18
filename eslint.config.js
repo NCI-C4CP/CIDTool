@@ -54,9 +54,8 @@ export default [
         },
         rules: {
             ...js.configs.recommended.rules,
-            // Warn, not error: there is a pre-existing backlog of dead locals and
-            // imports. Surfacing them is useful; blocking CI on them is not.
-            'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }]
+            // ignoreRestSiblings keeps `const { _sourceRow, ...rest } = x` omit patterns legal
+            'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none', ignoreRestSiblings: true }]
         }
     },
     {
@@ -88,7 +87,7 @@ export default [
         },
         rules: {
             ...js.configs.recommended.rules,
-            'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }]
+            'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none', ignoreRestSiblings: true }]
         }
     }
 ];

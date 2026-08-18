@@ -37,7 +37,7 @@
  *   node tests/fixtures/generate-import-workbook.js /tmp/smoke.xlsx --questions=40 --sets=4
  */
 
-import { writeFileSync, existsSync, statSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
 import * as XLSX from 'xlsx';

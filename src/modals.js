@@ -12,7 +12,7 @@
  * @requires config - Modal configuration constants
  */
 
-import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, initReferenceDropdown, validateFormFields, showUserNotification, formatConceptDisplay, extractConcept } from './common.js';
+import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, initReferenceDropdown, validateFormFields, showUserNotification, extractConcept } from './common.js';
 import { addFile, deleteFile, getConcept, updateFile, checkReferences, commitFiles } from './api.js';
 import { refreshHomePage } from './homepage.js';
 import { MODAL_CONFIG, CONCEPT_TYPE_COLORS, API_CONFIG } from './config.js';
@@ -203,7 +203,7 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
             (importOptions.title || `Review Imported Concept ${importOptions.current ? `(${importOptions.current} of ${importOptions.total})` : ''}`) : 
             'Add Concept';
             
-        const { modal, header, body, footer } = ModalUtils.setupModal(modalTitle);
+        const { modal, body, footer } = ModalUtils.setupModal(modalTitle);
 
         const concept = await getConcept();
 
@@ -998,55 +998,6 @@ function renderEditMode(container, content, typeConfig) {
 }
 
 /**
- * Creates a formatted row for displaying field data in view mode
- * 
- * @function createFieldRow
- * 
- * @param {string} key - Field name/label
- * @param {*} value - Field value to display
- * @param {Object|null} fieldConfig - Optional field configuration for type-specific formatting
- * @returns {HTMLElement} DOM element containing the formatted field row
- * @throws {Error} Throws error if row creation fails
- */
-function createFieldRow(key, value, fieldConfig = null) {
-    const row = document.createElement('div');
-    row.classList.add('row', 'mb-3', 'align-items-center');
-    
-    // Format the value based on its type
-    let formattedValue = value;
-    
-    if (fieldConfig) {
-        // Format based on field type
-        switch (fieldConfig.type) {
-            case 'reference':
-                // Format reference fields specially
-                formattedValue = `<span class="badge bg-secondary">${value}</span>`;
-                break;
-        }
-    } else {
-        // Format based on value type if no field config
-        if (Array.isArray(value)) {
-            formattedValue = value.map(item => 
-                `<span class="badge bg-light text-dark me-1 mb-1">${item}</span>`
-            ).join('');
-        } else if (typeof value === 'object' && value !== null) {
-            formattedValue = `<pre class="mb-0">${JSON.stringify(value, null, 2)}</pre>`;
-        }
-    }
-    
-    row.innerHTML = `
-        <div class="col-4">
-            <strong>${key}</strong>
-        </div>
-        <div class="col-8">
-            <div class="form-control-plaintext">${formattedValue}</div>
-        </div>
-    `;
-    
-    return row;
-}
-
-/**
  * Renders a modal showing file upload progress with real-time status updates
  * 
  * @async
@@ -1063,7 +1014,7 @@ export const renderUploadModal = async (files) => {
             throw new Error('No files provided for upload');
         }
 
-        const { modal, header, body, footer } = ModalUtils.setupModal('Uploading Files');
+        const { modal, body, footer } = ModalUtils.setupModal('Uploading Files');
 
         // Clear previous content  
         body.innerHTML = '';
@@ -1307,23 +1258,6 @@ export const renderConfigModal = async () => {
     } catch (error) {
         ModalUtils.handleModalError(error, 'Configuration modal setup');
     }
-}
-
-/**
- * Generates HTML table rows for configuration field editing
- * 
- * @function generateFieldRows
- * 
- * @param {Array<Object>} fields - Array of field configuration objects
- * @param {string} conceptType - Type of concept (PRIMARY, SECONDARY, etc.)
- * @returns {string} HTML string containing table rows for field editing
- * @throws {Error} Throws error if field rendering fails
- */
-function generateFieldRows(fields, conceptType) {
-    if (!fields || !Array.isArray(fields)) return '';
-    
-    const conceptTypes = Object.keys(MODAL_CONFIG.CONCEPT_TYPES);
-    return fields.map(field => FORM_UTILS.generateConfigRow(field, conceptTypes)).join('');
 }
 
 /**
