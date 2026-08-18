@@ -325,7 +325,7 @@ export const FORM_UTILS = {
                     </div>
                 `;
                 
-            case 'select':
+            case 'select': {
                 const options = field.options || [];
                 return `
                     <select class="form-select" id="${fieldId}" ${attributes}>
@@ -334,6 +334,7 @@ export const FORM_UTILS = {
                         `).join('')}
                     </select>
                 `;
+            }
                 
             default:
                 return `<input type="${field.type}" class="form-control" id="${fieldId}" value="${value}" ${attributes}>`;

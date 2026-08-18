@@ -545,8 +545,9 @@ export const getConfigurationSettings = async () => {
         
         const configContent = fromBase64(responseData.data.content);
         const config = JSON.parse(configContent);
-        
-        appState.setState({ config });
+
+        // Captured at load, not at save: this is what makes a concurrent config edit fail
+        appState.setState({ config, configSha: responseData.data.sha });
     } catch (error) {
         // Configuration is optional, so we don't want to show user errors for missing config
         // Check if it's a 404 (file not found) or other expected error

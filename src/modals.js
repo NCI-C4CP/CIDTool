@@ -13,7 +13,7 @@
  */
 
 import { showAnimation, hideAnimation, getFileContent, appState, createReferenceDropdown, initReferenceDropdown, validateFormFields, showUserNotification, formatConceptDisplay, extractConcept } from './common.js';
-import { addFile, deleteFile, getConcept, getFiles, updateFile, checkReferences, commitFiles } from './api.js';
+import { addFile, deleteFile, getConcept, updateFile, checkReferences, commitFiles } from './api.js';
 import { refreshHomePage } from './homepage.js';
 import { MODAL_CONFIG, CONCEPT_TYPE_COLORS, API_CONFIG } from './config.js';
 import { MODAL_TEMPLATES, FORM_UTILS } from './templates.js';
@@ -357,7 +357,8 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
 
             keyInput.classList.remove('is-invalid');
 
-            payload['conceptId'] = conceptId;
+            // conceptID, not conceptId: the import path has always written this spelling
+            payload['conceptID'] = conceptId;
             payload['key'] = key;
 
             const conceptTemplates = appState.getState().config;
@@ -413,7 +414,7 @@ export const renderAddModal = async (importData = null, importOptions = {}) => {
             }
         }
         } catch (error) {
-            ModalUtils.handleModalError(error, 'Add concept modal setup', modal);
+            ModalUtils.handleModalError(error, 'Add concept modal setup');
         }
 }
 
@@ -601,7 +602,7 @@ export const renderDeleteModal = async (event) => {
             ]);
         }
     } catch (error) {
-        ModalUtils.handleModalError(error, 'Delete confirmation modal', modal);
+        ModalUtils.handleModalError(error, 'Delete confirmation modal');
     }
 }
 
@@ -853,7 +854,7 @@ function renderViewMode(container, content, typeConfig) {
                         fieldHTML = `<div class="field-value concept-id">${fieldValue}</div>`;
                         coreFields.appendChild(fieldGroup);
                         break;
-                    case 'reference':
+                    case 'reference': {
                         // Get color based on what type this reference points to
                         const refColor = CONCEPT_TYPE_COLORS[field.referencesType]?.hex || '#6c757d';
                         const badgeStyle = `background-color: ${refColor}; color: white;`;
@@ -875,6 +876,7 @@ function renderViewMode(container, content, typeConfig) {
                         }
                         referenceFields.appendChild(fieldGroup);
                         break;
+                    }
                     default:
                         fieldHTML = `<div class="field-value">${fieldValue}</div>`;
                         
@@ -1117,7 +1119,7 @@ export const renderUploadModal = async (files) => {
             await refreshHomePage();
         });
     } catch (error) {
-        ModalUtils.handleModalError(error, 'File upload modal', modal);
+        ModalUtils.handleModalError(error, 'File upload modal');
     }
 }
 
@@ -1248,7 +1250,7 @@ export const renderConfigModal = async () => {
         
         try {
             // Preserve any config keys this modal doesn't manage
-            const { config: existingConfig } = appState.getState();
+            const { config: existingConfig, configSha } = appState.getState();
             const newConfig = { ...(existingConfig || {}) };
             
             MODAL_CONFIG.CONCEPT_TYPES.forEach(type => {
@@ -1288,23 +1290,22 @@ export const renderConfigModal = async () => {
             });
             
             // Save to a config file in the repository
-            const file = await getFiles('config.json');
-            await updateFile(file.data.path, JSON.stringify(newConfig, null, 2), file.data.sha);
-            
-            // Update appState
-            appState.setState({ config: newConfig });
+            const saved = await updateFile('config.json', JSON.stringify(newConfig, null, 2), configSha);
+
+            // Update appState, carrying the new sha so a second save in the same session works
+            appState.setState({ config: newConfig, configSha: saved?.data?.content?.sha });
             
             // Close the modal
             bootstrap.Modal.getInstance(modal).hide();
         } catch (error) {
-            console.log(error);
-            alert('An error occurred while saving the configuration.');
+            // validateResponse already notified the user, including the 409 conflict case
+            console.error('Configuration save failed:', error);
         } finally {
             hideAnimation();
         }
     });
     } catch (error) {
-        ModalUtils.handleModalError(error, 'Configuration modal setup', modal);
+        ModalUtils.handleModalError(error, 'Configuration modal setup');
     }
 }
 

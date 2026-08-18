@@ -1,0 +1,123 @@
+{
+  "description": "Test dictionary fixture for CIDTool import testing. Represents a realistic epidemiologic survey dictionary with 2 Primaries, 4 Secondaries, 2 Sources, 8 Questions (including a shared Version question), and 12 Responses.",
+  "config": {
+    "PRIMARY": [
+      { "id": "conceptId", "label": "Concept ID", "type": "concept", "required": false },
+      { "id": "key", "label": "Primary Key", "type": "text", "required": true },
+      { "id": "description", "label": "Description", "type": "text", "required": true }
+    ],
+    "SECONDARY": [
+      { "id": "conceptId", "label": "Concept ID", "type": "concept", "required": false },
+      { "id": "key", "label": "Secondary Key", "type": "text", "required": true },
+      { "id": "description", "label": "Description", "type": "text", "required": false },
+      { "id": "parentPrimary", "label": "Parent Primary", "type": "reference", "referencesType": "PRIMARY", "required": true }
+    ],
+    "SOURCE": [
+      { "id": "conceptId", "label": "Concept ID", "type": "concept", "required": false },
+      { "id": "key", "label": "Source Key", "type": "text", "required": true }
+    ],
+    "QUESTION": [
+      { "id": "conceptId", "label": "Concept ID", "type": "concept", "required": false },
+      { "id": "key", "label": "Question Key", "type": "text", "required": true },
+      { "id": "text", "label": "Question Text", "type": "text", "required": true },
+      { "id": "parentSecondary", "label": "Parent Secondary", "type": "reference", "referencesType": "SECONDARY", "required": true, "allowMultiple": true },
+      { "id": "parentSource", "label": "Source", "type": "reference", "referencesType": "SOURCE", "required": false },
+      { "id": "responses", "label": "Responses", "type": "reference", "referencesType": "RESPONSE", "required": false }
+    ],
+    "RESPONSE": [
+      { "id": "conceptId", "label": "Concept ID", "type": "concept", "required": false },
+      { "id": "key", "label": "Response Key", "type": "text", "required": true },
+      { "id": "value", "label": "Value", "type": "text", "required": false }
+    ]
+  },
+  "headers": [
+    "PRIMARY_KEY", "PRIMARY_CID", "PRIMARY_DESCRIPTION",
+    "SECONDARY_KEY", "SECONDARY_CID", "SECONDARY_DESCRIPTION",
+    "SOURCE_KEY", "SOURCE_CID",
+    "QUESTION_KEY", "QUESTION_CID", "QUESTION_TEXT",
+    "RESPONSE_KEY", "RESPONSE_CID", "RESPONSE_VALUE"
+  ],
+  "data": [
+    ["Study",      100000001, "Cohort study data",     "Baseline Survey",  200000001, "Baseline enrollment survey",  "Paper Form",  300000001, "Age",            400000001, "Age at enrollment",    "Under 40",    500000001, "1"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "40 to 59",    500000002, "2"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "60 or older", 500000003, "3"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "Sex",            400000002, "Sex assigned at birth", "Male",        500000004, "1"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "Female",      500000005, "2"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "SmokingStatus",  400000003, "Current smoking status","Never",       500000006, "0"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "Former",      500000007, "1"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "Current",     500000008, "2"],
+    ["",           "",        "",                       "Follow-Up Survey", 200000002, "Annual follow-up survey",     "Online Form", 300000002, "WeightChange",   400000004, "Weight change since last visit", "Lost weight",  500000009, "1"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "No change",   500000010, "2"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "Gained weight",500000011,"3"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "PhysicalActivity",400000005,"Days of physical activity per week","",       "",        ""],
+    ["Biospecimen",100000002, "Biospecimen collection", "Blood",            200000003, "Blood sample collection",     "",            "",        "CollectionDate", 400000006, "Date of blood draw",   "",            "",        ""],
+    ["",           "",        "",                       "Saliva",           200000004, "Saliva sample collection",    "",            "",        "SampleVolume",   400000007, "Volume of saliva in mL","",           "",        ""]
+  ],
+  "sharedQuestionRows": [
+    {
+      "_comment": "Version question shared across Baseline Survey and Follow-Up Survey (tests allowMultiple). These rows appear after the above data to represent a Question under multiple Secondaries.",
+      "additionalRows": [
+        ["",           "",        "",                       "Baseline Survey",  200000001, "",                            "",            "",        "Version",        400000008, "Survey version number", "v1",         500000012, "1"],
+        ["",           "",        "",                       "Follow-Up Survey", 200000002, "",                            "",            "",        "Version",        400000008, "Survey version number", "v2",         500000013, "2"]
+      ]
+    }
+  ],
+  "fullData": [
+    ["Study",      100000001, "Cohort study data",     "Baseline Survey",  200000001, "Baseline enrollment survey",  "Paper Form",  300000001, "Age",            400000001, "Age at enrollment",    "Under 40",    500000001, "1"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "40 to 59",    500000002, "2"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "60 or older", 500000003, "3"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "Sex",            400000002, "Sex assigned at birth", "Male",        500000004, "1"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "Female",      500000005, "2"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "SmokingStatus",  400000003, "Current smoking status","Never",       500000006, "0"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "Former",      500000007, "1"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "Current",     500000008, "2"],
+    ["",           "",        "",                       "Follow-Up Survey", 200000002, "Annual follow-up survey",     "Online Form", 300000002, "WeightChange",   400000004, "Weight change since last visit", "Lost weight",  500000009, "1"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "No change",   500000010, "2"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "",               "",        "",                     "Gained weight",500000011,"3"],
+    ["",           "",        "",                       "",                 "",        "",                            "",            "",        "PhysicalActivity",400000005,"Days of physical activity per week","",       "",        ""],
+    ["Biospecimen",100000002, "Biospecimen collection", "Blood",            200000003, "Blood sample collection",     "",            "",        "CollectionDate", 400000006, "Date of blood draw",   "",            "",        ""],
+    ["",           "",        "",                       "Saliva",           200000004, "Saliva sample collection",    "",            "",        "SampleVolume",   400000007, "Volume of saliva in mL","",           "",        ""],
+    ["",           "",        "",                       "Baseline Survey",  200000001, "",                            "",            "",        "Version",        400000008, "Survey version number", "v1",         500000012, "1"],
+    ["",           "",        "",                       "Follow-Up Survey", 200000002, "",                            "",            "",        "Version",        400000008, "Survey version number", "v2",         500000013, "2"]
+  ],
+  "expectedCounts": {
+    "PRIMARY": 2,
+    "SECONDARY": 4,
+    "SOURCE": 2,
+    "QUESTION": 8,
+    "RESPONSE": 13,
+    "total": 29,
+    "_note": "Version question (400000008) should reference both Secondaries 200000001 and 200000002 via allowMultiple"
+  },
+  "expectedMappings": {
+    "Study": 100000001,
+    "Biospecimen": 100000002,
+    "Baseline Survey": 200000001,
+    "Follow-Up Survey": 200000002,
+    "Blood": 200000003,
+    "Saliva": 200000004,
+    "Paper Form": 300000001,
+    "Online Form": 300000002,
+    "Age": 400000001,
+    "Sex": 400000002,
+    "SmokingStatus": 400000003,
+    "WeightChange": 400000004,
+    "PhysicalActivity": 400000005,
+    "CollectionDate": 400000006,
+    "SampleVolume": 400000007,
+    "Version": 400000008,
+    "Under 40": 500000001,
+    "40 to 59": 500000002,
+    "60 or older": 500000003,
+    "Male": 500000004,
+    "Female": 500000005,
+    "Never": 500000006,
+    "Former": 500000007,
+    "Current": 500000008,
+    "Lost weight": 500000009,
+    "No change": 500000010,
+    "Gained weight": 500000011,
+    "v1": 500000012,
+    "v2": 500000013
+  }
+}

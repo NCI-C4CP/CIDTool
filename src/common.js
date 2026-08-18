@@ -212,6 +212,27 @@ export const preventDefaults = (e) => {
     e.stopPropagation();
 }
 
+/**
+ * Collapses the two spellings of the concept id field onto `conceptID`.
+ *
+ * The bulk import has always written `conceptID` and the add-concept modal wrote
+ * `conceptId`, so existing repos contain both. Normalizing on read means the rest of
+ * the app only ever sees one spelling.
+ *
+ * @param {Object} concept - Parsed concept file contents
+ * @returns {Object} The same object, with `conceptID` set and `conceptId` removed
+ */
+export const normalizeConcept = (concept) => {
+    if (!concept || typeof concept !== 'object') return concept;
+
+    if (concept.conceptId !== undefined) {
+        if (concept.conceptID === undefined) concept.conceptID = concept.conceptId;
+        delete concept.conceptId;
+    }
+
+    return concept;
+};
+
 export const getFileContent = async (file) => {
     try {
         const contents = await getFiles(file);
@@ -229,7 +250,7 @@ export const getFileContent = async (file) => {
         }
         
         return {
-            content: JSON.parse(fileContentString),
+            content: normalizeConcept(JSON.parse(fileContentString)),
             meta: contents.data
         };
     } catch (error) {
